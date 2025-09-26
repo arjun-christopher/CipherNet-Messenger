@@ -6,20 +6,20 @@
 ![Python](https://img.shields.io/badge/python-3.9+-brightgreen.svg)
 ![Status](https://img.shields.io/badge/status-prototype-orange.svg)
 
-## 🔒 Overview
+## Overview
 
 CipherNet Messenger is a secure, decentralized peer-to-peer messaging application that prioritizes user privacy and security. Unlike traditional messaging platforms that rely on centralized servers, CipherNet establishes direct encrypted communication channels between users, eliminating single points of failure and surveillance risks.
 
 ### Key Features
 
-- **🔐 End-to-End Encryption**: Hybrid RSA-Blowfish cryptosystem for maximum security
-- **🌐 Peer-to-Peer Architecture**: Direct communication without central server dependency
-- **🛡️ Data Integrity**: SHA-256 based integrity controls for all communications
-- **🔍 Private Peer Discovery**: Secure user discovery without exposing IP addresses
-- **📁 Secure File Transfer**: Encrypted file sharing with integrity verification
-- **🎨 Modern GUI**: Clean, intuitive interface built with CustomTkinter
+- **End-to-End Encryption**: Hybrid RSA-Blowfish cryptosystem for maximum security
+- **Peer-to-Peer Architecture**: Direct communication without central server dependency
+- **Data Integrity**: SHA-256 based integrity controls for all communications
+- **Private Peer Discovery**: Secure user discovery without exposing IP addresses
+- **Secure File Transfer**: Encrypted file sharing with integrity verification
+- **Modern GUI**: Clean, intuitive interface built with CustomTkinter
 
-## 🚀 Problem Statement
+## Problem Statement
 
 Traditional messaging platforms suffer from critical vulnerabilities:
 
@@ -30,7 +30,7 @@ Traditional messaging platforms suffer from critical vulnerabilities:
 
 CipherNet addresses these issues by providing **provable confidentiality, integrity, and availability** free from centralized control.
 
-## 🏗️ Architecture
+## Architecture
 
 ### Hybrid Model Design
 
@@ -50,7 +50,7 @@ User A ←→ Firebase (Auth/Signaling) ←→ User B
          (Encrypted TCP Socket)
 ```
 
-## 🔧 Technology Stack
+## Technology Stack
 
 - **Language**: Python 3.9+
 - **GUI Framework**: CustomTkinter (modern Tkinter-based UI)
@@ -61,7 +61,7 @@ User A ←→ Firebase (Auth/Signaling) ←→ User B
 - **Notifications**: desktop-notifier (cross-platform notifications)
 - **Image Processing**: Pillow (file validation and sanitization)
 
-## 🔐 Security Implementation
+## Security Implementation
 
 ### Cryptographic Algorithms
 
@@ -105,7 +105,7 @@ User A ←→ Firebase (Auth/Signaling) ←→ User B
 3. File transmitted in encrypted 4096-byte chunks
 4. Receiver verifies file integrity using hash comparison
 
-## 📋 Installation & Setup
+## Installation & Setup
 
 ### Prerequisites
 
@@ -124,18 +124,18 @@ pip install pycryptodome customtkinter firebase-admin desktop-notifier Pillow
 2. Configure Firebase credentials in the application
 3. Run the application
 
-## 🎯 Project Results
+## Project Results
 
 The CipherNet Messenger prototype successfully demonstrates:
 
-- ✅ Functional P2P messaging with intuitive GUI
-- ✅ Strong end-to-end encryption implementation
-- ✅ Secure peer discovery without IP exposure
-- ✅ Guaranteed message and file integrity
-- ✅ High performance with negligible latency
-- ✅ Proof-of-concept for decentralized communication
+- Functional P2P messaging with intuitive GUI
+- Strong end-to-end encryption implementation
+- Secure peer discovery without IP exposure
+- Guaranteed message and file integrity
+- High performance with negligible latency
+- Proof-of-concept for decentralized communication
 
-## 🔍 Security Guarantees
+## Security Guarantees
 
 ### Confidentiality
 - **Hybrid Encryption**: RSA for key exchange, Blowfish for data
@@ -149,7 +149,7 @@ The CipherNet Messenger prototype successfully demonstrates:
 - **Decentralized Architecture**: No single point of failure
 - **Direct P2P**: Independent of central server uptime
 
-## 📚 Technical Documentation
+## Technical Documentation
 
 For detailed technical information, see the complete [Project Report](docs/Project%20Report.txt) including:
 
@@ -158,31 +158,14 @@ For detailed technical information, see the complete [Project Report](docs/Proje
 - Implementation details
 - Performance evaluation
 
-## 🤝 Contributing
+## Contributing
 
 This project was developed as part of an Information Security course at Puducherry Technological University. Contributions and improvements are welcome!
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 👨‍💻 Author
-
-**Arjun Christopher** [2201112007]  
-Department of Information Technology  
-Puducherry Technological University
-
-**Supervisor**: Dr. G. Santhi B.E., M.E., Ph.D.  
-Professor, Department of Information Technology
-
-## 🔗 References
-
-- [Blowfish Algorithm](https://www.schneier.com/academic/blowfish/)
-- [RSA Cryptosystem](https://people.csail.mit.edu/rivest/Rsapaper.pdf)
-- [HMAC Standard (RFC 2104)](https://tools.ietf.org/html/rfc2104)
-- [pycryptodome Documentation](https://www.pycryptodome.org/en/latest/)
-- [Firebase Documentation](https://firebase.google.com/docs)
-
 ---
 
-**⚠️ Note**: This is a prototype/proof-of-concept developed for educational purposes. While it implements strong cryptographic principles, thorough security auditing would be required before production use.
+**Note**: This is a prototype/proof-of-concept developed for educational purposes. While it implements strong cryptographic principles, thorough security auditing would be required before production use.
