@@ -110,6 +110,7 @@ venv.bak/
 *.swp
 *.swo
 *~
+.dist/
 
 # macOS
 .DS_Store
