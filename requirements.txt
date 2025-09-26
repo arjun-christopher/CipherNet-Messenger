@@ -1,0 +1,21 @@
+# CipherNet Messenger Dependencies
+# Core cryptography
+pycryptodome>=3.19.0
+
+# GUI framework
+customtkinter>=5.2.0
+
+# Firebase authentication and database
+firebase-admin>=6.2.0
+requests>=2.31.0
+
+# Image processing and validation
+Pillow>=10.0.0
+
+# Desktop notifications
+desktop-notifier>=3.5.0
+
+# Development and testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-mock>=3.11.0
