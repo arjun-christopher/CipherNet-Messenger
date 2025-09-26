@@ -62,6 +62,30 @@ def temp_config():
 
 
 @pytest.fixture
+def temp_config_with_firebase():
+    """Create a temporary configuration file with Firebase settings."""
+    firebase_config = TEST_CONFIG.copy()
+    firebase_config["firebase"] = {
+        "api_key": "config-api-key",
+        "auth_domain": "config-project.firebaseapp.com",
+        "database_url": "https://config-project-rtdb.firebaseio.com",
+        "project_id": "config-project-id",
+        "storage_bucket": "config-project.appspot.com",
+        "messaging_sender_id": "123456789",
+        "app_id": "1:123456789:web:abcdef"
+    }
+    
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        json.dump(firebase_config, f, indent=4)
+        temp_path = f.name
+    
+    yield temp_path
+    
+    # Cleanup
+    Path(temp_path).unlink(missing_ok=True)
+
+
+@pytest.fixture
 def mock_config():
     """Create a mock configuration object."""
     mock_config = Mock()

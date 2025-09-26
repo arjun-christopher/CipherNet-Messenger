@@ -63,10 +63,11 @@ pip install -r requirements.txt
 
 #### Configuration
 
-1. Run the setup script: `python setup.py` (creates config.json automatically)
+1. Run the setup script: `python setup.py` (creates config files automatically)
 2. Set up Firebase project with Authentication and Realtime Database
-3. Edit `config.json` with your Firebase credentials (see template in src/config.py)
-4. Run the application: `python src/main.py`
+3. Edit `.env` file with your Firebase credentials (copied from .env.example)
+4. Optionally edit `config.json` for other application settings
+5. Run the application: `python src/main.py`
 
 ## Architecture
 
@@ -161,6 +162,7 @@ User A ←→ Firebase (Auth/Signaling) ←→ User B
 
 ```
 CipherNet-Messenger/
+├── docs/                       # Documentation
 ├── src/                          # Source code
 │   ├── main.py                  # Application entry point
 │   ├── config.py                # Configuration management
@@ -179,7 +181,7 @@ CipherNet-Messenger/
 │   ├── test_network_manager.py # Network tests
 │   ├── test_notification_manager.py # Notification tests
 │   └── run_tests.py           # Test runner
-├── docs/                       # Documentation
+├── .gitignore                 # Git ignore rules
 ├── requirements.txt            # Dependencies
 ├── setup.py                   # Setup script
 └── README.md                 # This file

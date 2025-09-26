@@ -76,15 +76,7 @@ def create_config_file():
             "hash_algorithm": "SHA-256",
             "padding_scheme": "OAEP"
         },
-        "firebase": {
-            "api_key": "your-firebase-api-key",
-            "auth_domain": "your-project.firebaseapp.com",
-            "database_url": "https://your-project-default-rtdb.firebaseio.com",
-            "project_id": "your-project-id",
-            "storage_bucket": "your-project.appspot.com",
-            "messaging_sender_id": "your-sender-id",
-            "app_id": "your-app-id"
-        },
+
         "ui": {
             "theme": "dark",
             "window_width": 1000,
@@ -97,11 +89,34 @@ def create_config_file():
         with open(config_file, 'w') as f:
             json.dump(config_template, f, indent=2)
         print("✅ config.json created with template structure")
-        print("⚠️  Please edit config.json with your Firebase configuration")
         return True
         
     except Exception as e:
         print(f"❌ Failed to create config.json: {e}")
+        return False
+
+
+def create_env_file():
+    """Create .env file from template if it doesn't exist."""
+    env_file = Path(__file__).parent / ".env"
+    env_example_file = Path(__file__).parent / ".env.example"
+    
+    if env_file.exists():
+        print("⚠️  .env already exists, skipping creation")
+        return True
+    
+    if not env_example_file.exists():
+        print("❌ .env.example not found!")
+        return False
+    
+    try:
+        shutil.copy(env_example_file, env_file)
+        print("✅ .env created from template")
+        print("⚠️  Please edit .env with your Firebase configuration")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Failed to create .env: {e}")
         return False
 
 
@@ -229,6 +244,12 @@ def main():
     
     print()
     
+    # Create .env file
+    if not create_env_file():
+        return False
+    
+    print()
+    
     # Check optional dependencies
     if not check_optional_dependencies():
         return False
@@ -245,9 +266,10 @@ def main():
     print("\n🎉 Setup completed successfully!")
     print("\nNext steps:")
     print("1. Configure Firebase (see instructions above)")
-    print("2. Edit config.json with your Firebase settings")
-    print("3. Run: python src/main.py")
-    print("4. Run tests: python tests/run_tests.py")
+    print("2. Edit .env with your Firebase credentials")
+    print("3. Optionally edit config.json for other settings")
+    print("4. Run: python src/main.py")
+    print("5. Run tests: python tests/run_tests.py")
     
     return True
 

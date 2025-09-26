@@ -192,3 +192,37 @@ class TestConfig:
         assert isinstance(config.get("bool_value"), bool)
         assert isinstance(config.get("list_value"), list)
         assert isinstance(config.get("dict_value"), dict)
+    
+    @patch.dict('os.environ', {
+        'FIREBASE_API_KEY': 'test-api-key',
+        'FIREBASE_AUTH_DOMAIN': 'test-project.firebaseapp.com',
+        'FIREBASE_DATABASE_URL': 'https://test-project-rtdb.firebaseio.com',
+        'FIREBASE_PROJECT_ID': 'test-project-id'
+    })
+    def test_env_variable_loading(self):
+        """Test that Firebase configuration is loaded from environment variables."""
+        config = Config("nonexistent.json")
+        
+        assert config.get("firebase.api_key") == "test-api-key"
+        assert config.get("firebase.auth_domain") == "test-project.firebaseapp.com"
+        assert config.get("firebase.database_url") == "https://test-project-rtdb.firebaseio.com"
+        assert config.get("firebase.project_id") == "test-project-id"
+    
+    @patch.dict('os.environ', {
+        'FIREBASE_API_KEY': 'env-api-key'
+    })
+    def test_env_variables_override_config_file(self, temp_config_with_firebase):
+        """Test that environment variables take precedence over config file."""
+        config = Config(temp_config_with_firebase)
+        
+        # Environment variable should override config file value
+        assert config.get("firebase.api_key") == "env-api-key"
+        # Non-overridden values should still come from config file
+        assert config.get("firebase.project_id") == "config-project-id"
+    
+    def test_env_variables_empty_values_ignored(self):
+        """Test that empty environment variables are ignored."""
+        with patch.dict('os.environ', {'FIREBASE_API_KEY': '   '}):
+            config = Config("nonexistent.json")
+            # Should fall back to default empty value
+            assert config.get("firebase.api_key") == ""

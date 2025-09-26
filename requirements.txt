@@ -15,6 +15,9 @@ Pillow>=10.0.0
 # Desktop notifications
 desktop-notifier>=3.5.0
 
+# Environment variables
+python-dotenv>=1.0.0
+
 # Development and testing
 pytest>=7.4.0
 pytest-asyncio>=0.21.0
