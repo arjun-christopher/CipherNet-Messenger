@@ -368,18 +368,25 @@ class FileTransferManager:
                 print(f"❌ Chunk size mismatch for chunk {chunk_index}")
                 return
             
-            print(f"✅ Chunk {chunk_index} decrypted and authenticated successfully")
+            print(f"✅ Chunk {chunk_index} decrypted and authenticated successfully ({len(chunk_data)} bytes)")
             
             # Store decrypted chunk
             transfer_info['chunks'].append((chunk_index, chunk_data))
             transfer_info['bytes_received'] += len(chunk_data)
             
-            # Update progress
+            # Update progress and add debug info
             progress = (transfer_info['bytes_received'] / transfer_info['file_size']) * 100
-            print(f"📁 Secure file transfer progress: {progress:.1f}% (Blowfish + HMAC)")
+            chunks_received = len(transfer_info['chunks'])
+            print(f"📁 Secure file transfer progress: {progress:.1f}% (Blowfish + HMAC) - Chunk {chunk_index} - Total chunks: {chunks_received}")
+            print(f"📊 Transfer status - Received: {transfer_info['bytes_received']}/{transfer_info['file_size']} bytes")
             
             if is_last_chunk:
+                print(f"🏁 Last chunk received! Assembling and saving file...")
                 # Assemble and save file with integrity verification
+                self._assemble_and_save_file(transfer_id)
+            elif progress >= 99.0:  # Safety check for near-complete transfers
+                print(f"⚠️ Transfer appears complete ({progress:.1f}%) but last chunk flag not set. Attempting to save...")
+                # Try to save what we have
                 self._assemble_and_save_file(transfer_id)
                 
         except Exception as e:
@@ -553,11 +560,21 @@ class FileTransferManager:
             calculated_hash = self.crypto_manager.calculate_data_hash(file_data)
             
             print(f"🔍 Verifying file integrity using SHA-256...")
+            print(f"   Filename: {filename}")
+            print(f"   File size: {len(file_data)} bytes")
+            print(f"   Chunks assembled: {len(chunks)}")
             print(f"   Expected SHA-256: {expected_hash}")
             print(f"   Calculated SHA-256: {calculated_hash}")
             
             if calculated_hash != expected_hash:
                 print("❌ File integrity check failed! File may be corrupted or tampered with.")
+                print(f"   Saving anyway as partial file for debugging...")
+                # Save with _partial suffix for debugging
+                safe_filename = self._sanitize_filename(f"PARTIAL_{filename}")
+                file_path = self.downloads_dir / safe_filename
+                with open(file_path, 'wb') as f:
+                    f.write(file_data)
+                print(f"⚠️ Partial file saved for debugging: {file_path}")
                 return False
             
             print("✅ File integrity verified - SHA-256 hashes match")
@@ -582,11 +599,18 @@ class FileTransferManager:
             if self._is_image_file(file_path):
                 self._sanitize_image(file_path)
             
-            print(f"File saved: {file_path}")
+            print(f"💾 File saved successfully: {file_path}")
+            print(f"📁 File location: {file_path.absolute()}")
+            print(f"📊 Final file size: {file_path.stat().st_size} bytes")
             
             # Show completion notification
             if self.notification_manager:
                 self.notification_manager.notify_file_complete(filename, True)
+                
+            # Cleanup transfer
+            self._cleanup_transfer(transfer_id)
+            
+            return True
             
             # Notify sender of successful completion
             complete_message = {
@@ -602,6 +626,8 @@ class FileTransferManager:
             
         except Exception as e:
             print(f"Error assembling file: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def _validate_file_for_sending(self, file_path: Path) -> bool:
@@ -732,6 +758,52 @@ class FileTransferManager:
         
         if transfer_id in self.transfer_callbacks:
             del self.transfer_callbacks[transfer_id]
+    
+    def save_incomplete_transfers(self):
+        """
+        Save any incomplete transfers as partial files when connection is lost.
+        This is called when the application is shutting down or connections are lost.
+        """
+        try:
+            for transfer_id, transfer_info in list(self.active_transfers.items()):
+                if 'chunks' in transfer_info and transfer_info['chunks']:
+                    chunks_count = len(transfer_info['chunks'])
+                    bytes_received = transfer_info.get('bytes_received', 0)
+                    file_size = transfer_info.get('file_size', 0)
+                    progress = (bytes_received / file_size) * 100 if file_size > 0 else 0
+                    
+                    if progress > 10:  # Only save if we have substantial data
+                        print(f"💾 Saving incomplete transfer: {transfer_info['filename']} ({progress:.1f}% complete)")
+                        
+                        # Sort chunks by index
+                        chunks = transfer_info['chunks']
+                        chunks.sort(key=lambda x: x[0])
+                        
+                        # Assemble partial file data
+                        file_data = b''.join(chunk[1] for chunk in chunks)
+                        
+                        # Save with INCOMPLETE prefix
+                        filename = transfer_info['filename']
+                        safe_filename = self._sanitize_filename(f"INCOMPLETE_{filename}")
+                        file_path = Path(self.downloads_dir) / safe_filename
+                        
+                        # Ensure unique filename
+                        counter = 1
+                        original_path = file_path
+                        while file_path.exists():
+                            name = original_path.stem
+                            suffix = original_path.suffix
+                            file_path = original_path.parent / f"{name}_{counter}{suffix}"
+                            counter += 1
+                        
+                        with open(file_path, 'wb') as f:
+                            f.write(file_data)
+                        
+                        print(f"💾 Incomplete file saved: {file_path}")
+                        print(f"📊 Saved {len(file_data)} bytes ({chunks_count} chunks)")
+                        
+        except Exception as e:
+            print(f"Error saving incomplete transfers: {e}")
 
 
 class FileTransferError(Exception):
