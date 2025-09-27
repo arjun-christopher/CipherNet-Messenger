@@ -353,33 +353,61 @@ class GUIManager:
     
     def _handle_login(self):
         """Handle user login."""
-        email = self.email_entry.get().strip()
-        password = self.password_entry.get()
-        
-        if not email or not password:
-            self.status_label.configure(text="Please fill in all fields")
+        try:
+            # Check if widgets still exist
+            if not hasattr(self, 'email_entry') or not self.email_entry.winfo_exists():
+                return
+            if not hasattr(self, 'password_entry') or not self.password_entry.winfo_exists():
+                return
+            if not hasattr(self, 'status_label') or not self.status_label.winfo_exists():
+                return
+                
+            email = self.email_entry.get().strip()
+            password = self.password_entry.get()
+            
+            if not email or not password:
+                self.status_label.configure(text="Please fill in all fields")
+                return
+            
+            self.status_label.configure(text="Logging in...")
+            self.root.update()
+            
+            # Perform login in background thread
+            threading.Thread(target=self._login_worker, args=(email, password), daemon=True).start()
+        except tk.TclError:
+            # Widget has been destroyed, ignore
             return
-        
-        self.status_label.configure(text="Logging in...")
-        self.root.update()
-        
-        # Perform login in background thread
-        threading.Thread(target=self._login_worker, args=(email, password), daemon=True).start()
+        except Exception as e:
+            print(f"Error in login handler: {e}")
     
     def _handle_register(self):
         """Handle user registration."""
-        email = self.email_entry.get().strip()
-        password = self.password_entry.get()
-        
-        if not email or not password:
-            self.status_label.configure(text="Please fill in all fields")
+        try:
+            # Check if widgets still exist
+            if not hasattr(self, 'email_entry') or not self.email_entry.winfo_exists():
+                return
+            if not hasattr(self, 'password_entry') or not self.password_entry.winfo_exists():
+                return
+            if not hasattr(self, 'status_label') or not self.status_label.winfo_exists():
+                return
+                
+            email = self.email_entry.get().strip()
+            password = self.password_entry.get()
+            
+            if not email or not password:
+                self.status_label.configure(text="Please fill in all fields")
+                return
+            
+            self.status_label.configure(text="Registering...")
+            self.root.update()
+            
+            # Perform registration in background thread
+            threading.Thread(target=self._register_worker, args=(email, password), daemon=True).start()
+        except tk.TclError:
+            # Widget has been destroyed, ignore
             return
-        
-        self.status_label.configure(text="Registering...")
-        self.root.update()
-        
-        # Perform registration in background thread
-        threading.Thread(target=self._register_worker, args=(email, password), daemon=True).start()
+        except Exception as e:
+            print(f"Error in register handler: {e}")
     
     def _login_worker(self, email: str, password: str):
         """Login worker thread."""
@@ -671,6 +699,12 @@ class GUIManager:
         if self.current_frame:
             self.current_frame.destroy()
             self.current_frame = None
+        
+        # Unbind any existing key bindings to prevent callback errors
+        try:
+            self.root.unbind('<Return>')
+        except:
+            pass
     
     def _on_closing(self):
         """Handle application closing."""
@@ -893,15 +927,15 @@ class GUIManager:
         # Send via network manager
         try:
             if self.network_manager and hasattr(self.network_manager, 'send_message'):
-                # Create message data
-                message_data = {
-                    'type': 'text_message',
+                # Create message content
+                message_content = {
                     'content': message,
-                    'timestamp': datetime.now().isoformat()
+                    'timestamp': datetime.now().isoformat(),
+                    'sender': self.current_user['email'] if self.current_user else 'Unknown'
                 }
                 
-                # Send to peer
-                success = self.network_manager.send_message(peer_id, message_data)
+                # Send to peer with correct parameters
+                success = self.network_manager.send_message(peer_id, 'text_message', message_content)
                 if not success:
                     self._add_system_message_integrated(peer_id, "⚠️ Failed to send message - connection issue")
             else:
