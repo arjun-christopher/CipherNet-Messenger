@@ -58,6 +58,11 @@ class GUIManager:
         self.public_key_pem = None
         self.private_key_pem = None
         self.processed_requests = set()  # Track processed request IDs
+        
+        # Single chat session management
+        self.active_chat_session = None  # Current active chat session
+        self.active_sessions = {}  # Track active sessions to prevent duplicates
+        self.current_view = "map"
     
     def start_application(self):
         """Start the GUI application."""
@@ -175,62 +180,85 @@ class GUIManager:
         self.root.after(2000, self._periodic_refresh)  # Refresh every 2 seconds
     
     def _create_main_layout(self):
-        """Create the main application layout with navigation and integrated chat."""
-        # Initialize current view state
-        self.current_view = "dashboard"
-        self.active_chat = None
+        """Create the main application layout with map-based user interface."""
+        # Initialize current view state  
+        self.current_view = "map"
         self.integrated_chat_widgets = {}
         
-        # Compact header
-        header_frame = ctk.CTkFrame(self.current_frame, height=45)
-        header_frame.pack(fill="x", padx=0, pady=0)
-        header_frame.pack_propagate(False)
+        # Main container
+        main_container = ctk.CTkFrame(self.current_frame, fg_color="transparent")
+        main_container.pack(fill="both", expand=True, padx=10, pady=10)
         
-        # User info - more compact
+        # Top navigation bar
+        nav_frame = ctk.CTkFrame(
+            main_container,
+            height=60,
+            fg_color=("#f8f9fa", "#2d3436")
+        )
+        nav_frame.pack(fill="x", pady=(0, 10))
+        nav_frame.pack_propagate(False)
+        
+        # Navigation buttons (horizontal)
+        self.map_btn = ctk.CTkButton(
+            nav_frame,
+            text="🗺️ User Map",
+            command=lambda: self._switch_view("map"),
+            height=40,
+            width=150,
+            fg_color=("#1e88e5", "#1565c0")
+        )
+        self.map_btn.pack(side="left", padx=(20, 10), pady=10)
+        
+        self.chat_btn = ctk.CTkButton(
+            nav_frame,
+            text="� Active Chat",
+            command=lambda: self._switch_view("chat"),
+            height=40,
+            width=150,
+            fg_color=("#565b5e", "#343638"),
+            state="disabled"  # Initially disabled until chat starts
+        )
+        self.chat_btn.pack(side="left", padx=10, pady=10)
+        
+        # Status indicator
+        self.status_label = ctk.CTkLabel(
+            nav_frame,
+            text="� No active chat",
+            font=ctk.CTkFont(size=12),
+            text_color=("#666", "#aaa")
+        )
+        self.status_label.pack(side="right", padx=20, pady=10)
+        
+        # User info
+        user_info = f"You: {self.current_user['email'] if self.current_user else 'Unknown'}"
         user_label = ctk.CTkLabel(
-            header_frame,
-            text=f"🔐 {self.current_user['email']}",
-            font=ctk.CTkFont(size=12, weight="bold")
-        )
-        user_label.pack(side="left", padx=15, pady=12)
-        
-        # Navigation buttons
-        nav_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
-        nav_frame.pack(side="left", padx=(20, 0))
-        
-        self.dashboard_btn = ctk.CTkButton(
             nav_frame,
-            text="📊 Dashboard",
-            command=lambda: self._switch_view("dashboard"),
-            width=100,
-            height=32,
-            fg_color=("#1f538d", "#14375e")
+            text=user_info,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color=("#2d3436", "#ddd")
         )
-        self.dashboard_btn.pack(side="left", padx=(0, 5))
+        user_label.pack(side="right", padx=(0, 20), pady=10)
         
-        self.chats_btn = ctk.CTkButton(
-            nav_frame,
-            text="💬 Chats",
-            command=lambda: self._switch_view("chats"),
-            width=100,
-            height=32,
-            fg_color=("#565b5e", "#343638")
-        )
-        self.chats_btn.pack(side="left", padx=5)
-        
-        # Logout button - more compact
+        # Logout button
         logout_button = ctk.CTkButton(
-            header_frame,
+            nav_frame,
             text="Logout",
             command=self._handle_logout,
-            width=70,
-            height=32
+            width=80,
+            height=35,
+            fg_color=("#dc3545", "#b02a37")
         )
-        logout_button.pack(side="right", padx=15, pady=6)
+        logout_button.pack(side="right", padx=(0, 20), pady=12)
         
-        # Main content area - no padding waste
-        self.content_frame = ctk.CTkFrame(self.current_frame)
-        self.content_frame.pack(fill="both", expand=True, padx=0, pady=(2, 0))
+        # Content area
+        self.content_frame = ctk.CTkFrame(
+            main_container,
+            fg_color=("#ffffff", "#1e1e1e")
+        )
+        self.content_frame.pack(fill="both", expand=True)
+        
+        # Start with map view
+        self._switch_view("map")
         
         # Create dashboard view
         self._create_dashboard_view()
@@ -239,24 +267,58 @@ class GUIManager:
         self._create_chat_view()
     
     def _switch_view(self, view_name):
-        """Switch between dashboard and chat views."""
+        """Switch between map and chat views."""
         self.current_view = view_name
         
-        if view_name == "dashboard":
-            self.dashboard_btn.configure(fg_color=("#1f538d", "#14375e"))
-            self.chats_btn.configure(fg_color=("#565b5e", "#343638"))
-            self.dashboard_view.pack(fill="both", expand=True)
-            self.chat_view.pack_forget()
-        elif view_name == "chats":
-            self.dashboard_btn.configure(fg_color=("#565b5e", "#343638"))
-            self.chats_btn.configure(fg_color=("#1f538d", "#14375e"))
-            self.dashboard_view.pack_forget()
-            self.chat_view.pack(fill="both", expand=True)
+        # Clear current content
+        for widget in self.content_frame.winfo_children():
+            widget.destroy()
+        
+        # Update button states and show appropriate view
+        if view_name == "map":
+            self.map_btn.configure(fg_color=("#1e88e5", "#1565c0"))
+            self.chat_btn.configure(fg_color=("#565b5e", "#343638"))
+            self._create_map_view()
+        elif view_name == "chat":
+            self.map_btn.configure(fg_color=("#565b5e", "#343638"))
+            self.chat_btn.configure(fg_color=("#1e88e5", "#1565c0"))
+            self._create_chat_view()
     
-    def _create_dashboard_view(self):
-        """Create the dashboard view with online users."""
-        self.dashboard_view = ctk.CTkFrame(self.content_frame)
-        self.dashboard_view.pack(fill="both", expand=True)
+    def _create_map_view(self):
+        """Create map view showing active users in a grid layout."""
+        # Map header
+        header_frame = ctk.CTkFrame(self.content_frame, height=80, fg_color="transparent")
+        header_frame.pack(fill="x", padx=20, pady=(20, 10))
+        header_frame.pack_propagate(False)
+        
+        map_title = ctk.CTkLabel(
+            header_frame,
+            text="🗺️ Active Users Map",
+            font=ctk.CTkFont(size=24, weight="bold"),
+            text_color=("#2d3436", "#ddd")
+        )
+        map_title.pack(side="left", pady=20)
+        
+        # Refresh button
+        refresh_btn = ctk.CTkButton(
+            header_frame,
+            text="🔄 Refresh",
+            command=self._refresh_user_map,
+            width=100,
+            height=35,
+            fg_color=("#1e88e5", "#1565c0")
+        )
+        refresh_btn.pack(side="right", pady=20)
+        
+        # Map grid area
+        self.map_grid_frame = ctk.CTkScrollableFrame(
+            self.content_frame,
+            fg_color=("#f8f9fa", "#2a2a2a")
+        )
+        self.map_grid_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+        
+        # Load users into map
+        self._load_user_map()
         
         # Split layout - users on left, info on right
         users_frame = ctk.CTkFrame(self.dashboard_view, width=280)
@@ -468,6 +530,451 @@ class GUIManager:
         # Show login screen
         self.show_login_screen()
     
+    def _load_user_map(self):
+        """Load online users into the map grid."""
+        # Clear existing widgets
+        for widget in self.map_grid_frame.winfo_children():
+            widget.destroy()
+        
+        # Get online users
+        online_users = self.firebase_manager.get_online_users()
+        
+        if not online_users:
+            no_users_label = ctk.CTkLabel(
+                self.map_grid_frame,
+                text="No other users are currently online",
+                font=ctk.CTkFont(size=16),
+                text_color=("#666", "#aaa")
+            )
+            no_users_label.pack(pady=50)
+            return
+        
+        # Create grid of user cards
+        users_per_row = 4
+        current_row_frame = None
+        
+        for i, user in enumerate(online_users):
+            # Create new row every 4 users
+            if i % users_per_row == 0:
+                current_row_frame = ctk.CTkFrame(
+                    self.map_grid_frame, 
+                    fg_color="transparent",
+                    height=180
+                )
+                current_row_frame.pack(fill="x", pady=10, padx=10)
+            
+            # Create user card
+            self._create_user_card(current_row_frame, user)
+    
+    def _create_user_card(self, parent, user):
+        """Create a user card widget."""
+        # Check if already in active session
+        is_active = self._is_user_in_active_session(user)
+        
+        card_frame = ctk.CTkFrame(
+            parent,
+            width=220,
+            height=160,
+            fg_color=("#ffffff", "#333333") if not is_active else ("#e8f4fd", "#2a4a5a")
+        )
+        card_frame.pack(side="left", padx=10, pady=10)
+        card_frame.pack_propagate(False)
+        
+        # Avatar
+        avatar_frame = ctk.CTkFrame(
+            card_frame,
+            width=60,
+            height=60,
+            fg_color=("#1e88e5", "#1565c0"),
+            corner_radius=30
+        )
+        avatar_frame.pack(pady=(15, 10))
+        avatar_frame.pack_propagate(False)
+        
+        avatar_label = ctk.CTkLabel(
+            avatar_frame,
+            text=user['email'][0].upper(),
+            font=ctk.CTkFont(size=24, weight="bold"),
+            text_color="white"
+        )
+        avatar_label.pack(expand=True)
+        
+        # User info
+        email_label = ctk.CTkLabel(
+            card_frame,
+            text=user['email'].split('@')[0],
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color=("#2d3436", "#ddd")
+        )
+        email_label.pack(pady=(0, 5))
+        
+        # Status
+        status_text = "🟢 Online" if not is_active else "💬 In Chat"
+        status_label = ctk.CTkLabel(
+            card_frame,
+            text=status_text,
+            font=ctk.CTkFont(size=10),
+            text_color=("#28a745", "#4ade80") if not is_active else ("#1e88e5", "#60a5fa")
+        )
+        status_label.pack(pady=(0, 10))
+        
+        # Chat button
+        if not is_active:
+            chat_btn = ctk.CTkButton(
+                card_frame,
+                text="Start Chat",
+                command=lambda u=user: self._initiate_chat_from_map(u),
+                width=120,
+                height=30,
+                fg_color=("#1e88e5", "#1565c0")
+            )
+            chat_btn.pack(pady=(0, 10))
+        else:
+            active_label = ctk.CTkLabel(
+                card_frame,
+                text="Active Session",
+                font=ctk.CTkFont(size=10, weight="bold"),
+                text_color=("#dc3545", "#ef4444")
+            )
+            active_label.pack(pady=(0, 10))
+    
+    def _refresh_user_map(self):
+        """Refresh the user map."""
+        self._load_user_map()
+    
+    def _is_user_in_active_session(self, user):
+        """Check if user is already in an active chat session."""
+        if not self.active_chat_session:
+            return False
+        return self.active_chat_session.get('peer_email') == user['email']
+    
+    def _initiate_chat_from_map(self, user):
+        """Initiate chat from map view."""
+        # Check if already in active session with this user
+        if self._is_user_in_active_session(user):
+            messagebox.showinfo("Active Session", f"You already have an active chat with {user['email']}")
+            return
+        
+        # Check if user already has active session with someone else
+        if self.active_chat_session:
+            result = messagebox.askyesno(
+                "Active Chat Session", 
+                f"You have an active chat with {self.active_chat_session.get('peer_email', 'someone')}. End current session and start new chat with {user['email']}?"
+            )
+            if not result:
+                return
+            self._end_current_chat_session()
+        
+        # Send chat request
+        success = self.firebase_manager.send_chat_request(
+            user['uid'],
+            "Hello! Let's chat securely using CipherNet Messenger."
+        )
+        
+        if success:
+            messagebox.showinfo("Chat Request", f"Chat request sent to {user['email']}. Please wait for their response.")
+        else:
+            messagebox.showerror("Error", "Failed to send chat request")
+    
+    def _create_chat_view(self):
+        """Create the active chat view."""
+        if not self.active_chat_session:
+            # No active chat - show placeholder
+            placeholder_frame = ctk.CTkFrame(self.content_frame, fg_color="transparent")
+            placeholder_frame.pack(expand=True, fill="both")
+            
+            placeholder_label = ctk.CTkLabel(
+                placeholder_frame,
+                text="No active chat session\n\nUse the User Map to start a conversation",
+                font=ctk.CTkFont(size=16),
+                text_color=("#666", "#aaa")
+            )
+            placeholder_label.pack(expand=True)
+            return
+        
+        # Create chat interface
+        self._create_active_chat_interface()
+    
+    def _create_active_chat_interface(self):
+        """Create the active chat interface."""
+        session = self.active_chat_session
+        
+        # Chat header
+        header_frame = ctk.CTkFrame(
+            self.content_frame,
+            height=80,
+            fg_color=("#1e88e5", "#1565c0")
+        )
+        header_frame.pack(fill="x", padx=0, pady=0)
+        header_frame.pack_propagate(False)
+        
+        # Avatar and user info
+        avatar_frame = ctk.CTkFrame(
+            header_frame,
+            width=50,
+            height=50,
+            fg_color=("#e3f2fd", "#1e88e5"),
+            corner_radius=25
+        )
+        avatar_frame.pack(side="left", padx=20, pady=15)
+        avatar_frame.pack_propagate(False)
+        
+        avatar_label = ctk.CTkLabel(
+            avatar_frame,
+            text=session['peer_email'][0].upper(),
+            font=ctk.CTkFont(size=18, weight="bold"),
+            text_color=("#1565c0", "white")
+        )
+        avatar_label.pack(expand=True)
+        
+        # User info
+        info_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
+        info_frame.pack(side="left", fill="both", expand=True, padx=(10, 0))
+        
+        name_label = ctk.CTkLabel(
+            info_frame,
+            text=session['peer_email'].split('@')[0].title(),
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color="white"
+        )
+        name_label.pack(anchor="w", pady=(15, 0))
+        
+        status_label = ctk.CTkLabel(
+            info_frame,
+            text="🟢 Active Chat • End-to-end encrypted",
+            font=ctk.CTkFont(size=11),
+            text_color=("#e3f2fd", "#a0a0a0")
+        )
+        status_label.pack(anchor="w", pady=(0, 15))
+        
+        # End chat button
+        end_btn = ctk.CTkButton(
+            header_frame,
+            text="End Chat",
+            command=self._end_current_chat_session,
+            width=80,
+            height=35,
+            fg_color=("#dc3545", "#b02a37"),
+            hover_color=("#c82333", "#9a1e2a")
+        )
+        end_btn.pack(side="right", padx=20, pady=22)
+        
+        # Messages area
+        messages_frame = ctk.CTkScrollableFrame(
+            self.content_frame,
+            fg_color=("#f0f2f5", "#1a1a1a")
+        )
+        messages_frame.pack(fill="both", expand=True, padx=0, pady=0)
+        
+        # Store reference for adding messages
+        session['messages_frame'] = messages_frame
+        
+        # Input area
+        input_frame = ctk.CTkFrame(
+            self.content_frame,
+            height=70,
+            fg_color=("#ffffff", "#2a2a2a")
+        )
+        input_frame.pack(fill="x", padx=0, pady=0)
+        input_frame.pack_propagate(False)
+        
+        # Message entry
+        message_entry = ctk.CTkEntry(
+            input_frame,
+            placeholder_text="Type your message...",
+            height=40,
+            font=ctk.CTkFont(size=14)
+        )
+        message_entry.pack(side="left", fill="x", expand=True, padx=(15, 10), pady=15)
+        
+        # Send button
+        send_btn = ctk.CTkButton(
+            input_frame,
+            text="Send",
+            command=lambda: self._send_message_from_chat(message_entry),
+            width=80,
+            height=40,
+            fg_color=("#1e88e5", "#1565c0")
+        )
+        send_btn.pack(side="right", padx=(0, 15), pady=15)
+        
+        # Bind Enter key
+        message_entry.bind('<Return>', lambda e: self._send_message_from_chat(message_entry))
+        
+        # Store references
+        session['message_entry'] = message_entry
+    
+    def _start_chat_session(self, peer_id, peer_email):
+        """Start a new chat session."""
+        # End any existing session
+        if self.active_chat_session:
+            self._end_current_chat_session()
+        
+        # Create new session
+        self.active_chat_session = {
+            'peer_id': peer_id,
+            'peer_email': peer_email,
+            'messages': [],
+            'widgets': {}
+        }
+        
+        # Update UI status
+        self.status_label.configure(text=f"🟢 Chatting with {peer_email.split('@')[0]}")
+        self.chat_btn.configure(state="normal")
+        
+        # Switch to chat view
+        self._switch_view("chat")
+        
+        # Refresh map to show updated status
+        if hasattr(self, 'map_grid_frame'):
+            self.root.after(100, self._refresh_user_map)
+    
+    def _end_current_chat_session(self):
+        """End the current chat session."""
+        if not self.active_chat_session:
+            return
+        
+        # Clean up network connection
+        peer_id = self.active_chat_session.get('peer_id')
+        if peer_id and hasattr(self.network_manager, 'client_connections'):
+            if peer_id in self.network_manager.client_connections:
+                try:
+                    self.network_manager.client_connections[peer_id].close()
+                    del self.network_manager.client_connections[peer_id]
+                except:
+                    pass
+        
+        # Clear session
+        self.active_chat_session = None
+        
+        # Update UI
+        self.status_label.configure(text="🔴 No active chat")
+        self.chat_btn.configure(state="disabled")
+        
+        # Switch to map view
+        self._switch_view("map")
+        
+        messagebox.showinfo("Chat Ended", "Chat session has been ended.")
+    
+    def _send_message_from_chat(self, entry_widget):
+        """Send message from the active chat interface."""
+        if not self.active_chat_session:
+            return
+        
+        message = entry_widget.get().strip()
+        if not message:
+            return
+        
+        # Clear entry
+        entry_widget.delete(0, "end")
+        
+        # Add to local display
+        self._add_message_to_chat("You", message, is_own=True)
+        
+        # Send via network
+        peer_id = self.active_chat_session['peer_id']
+        try:
+            message_content = {
+                'content': message,
+                'timestamp': datetime.now().isoformat(),
+                'sender': self.current_user['email'] if self.current_user else 'Unknown'
+            }
+            
+            success = self.network_manager.send_message(peer_id, 'text_message', message_content)
+            if not success:
+                self._add_system_message_to_chat("⚠️ Failed to send message - peer may be offline")
+        except Exception as e:
+            print(f"Error sending message: {e}")
+            self._add_system_message_to_chat(f"⚠️ Message send failed: {str(e)}")
+    
+    def _add_message_to_chat(self, sender, message, is_own=False):
+        """Add a message to the active chat display."""
+        if not self.active_chat_session or 'messages_frame' not in self.active_chat_session:
+            return
+        
+        messages_frame = self.active_chat_session['messages_frame']
+        
+        # Message container
+        msg_container = ctk.CTkFrame(messages_frame, fg_color="transparent")
+        msg_container.pack(fill="x", padx=10, pady=5)
+        
+        if is_own:
+            # Sent message (right aligned, blue)
+            bubble_frame = ctk.CTkFrame(
+                msg_container,
+                fg_color=("#e3f2fd", "#276DC9"),
+                corner_radius=15
+            )
+            bubble_frame.pack(side="right", padx=(50, 0))
+            
+            msg_label = ctk.CTkLabel(
+                bubble_frame,
+                text=message,
+                font=ctk.CTkFont(size=12),
+                text_color=("#2d3748", "white"),
+                wraplength=300,
+                justify="left"
+            )
+            msg_label.pack(padx=12, pady=8)
+            
+            time_label = ctk.CTkLabel(
+                msg_container,
+                text=datetime.now().strftime("%H:%M"),
+                font=ctk.CTkFont(size=9),
+                text_color=("#718096", "#a0a0a0")
+            )
+            time_label.pack(side="right", padx=(0, 5))
+        else:
+            # Received message (left aligned, gray)
+            bubble_frame = ctk.CTkFrame(
+                msg_container,
+                fg_color=("#f7f7f7", "#404040"),
+                corner_radius=15
+            )
+            bubble_frame.pack(side="left", padx=(0, 50))
+            
+            msg_label = ctk.CTkLabel(
+                bubble_frame,
+                text=message,
+                font=ctk.CTkFont(size=12),
+                text_color=("#2d3748", "white"),
+                wraplength=300,
+                justify="left"
+            )
+            msg_label.pack(padx=12, pady=8)
+            
+            time_label = ctk.CTkLabel(
+                msg_container,
+                text=datetime.now().strftime("%H:%M"),
+                font=ctk.CTkFont(size=9),
+                text_color=("#718096", "#a0a0a0")
+            )
+            time_label.pack(side="left", padx=(5, 0))
+        
+        # Auto-scroll to bottom
+        messages_frame._parent_canvas.yview_moveto(1.0)
+    
+    def _add_system_message_to_chat(self, message):
+        """Add a system message to the active chat."""
+        if not self.active_chat_session or 'messages_frame' not in self.active_chat_session:
+            return
+        
+        messages_frame = self.active_chat_session['messages_frame']
+        
+        system_frame = ctk.CTkFrame(messages_frame, fg_color="transparent")
+        system_frame.pack(fill="x", padx=10, pady=2)
+        
+        system_label = ctk.CTkLabel(
+            system_frame,
+            text=message,
+            font=ctk.CTkFont(size=10, style="italic"),
+            text_color=("#666", "#aaa")
+        )
+        system_label.pack()
+        
+        # Auto-scroll to bottom
+        messages_frame._parent_canvas.yview_moveto(1.0)
+    
     def _refresh_online_users(self):
         """Refresh the online users list."""
         threading.Thread(target=self._refresh_users_worker, daemon=True).start()
@@ -554,6 +1061,22 @@ class GUIManager:
                 )
                 
                 if result:
+                    # Check if already in active session
+                    if self.active_chat_session:
+                        result = messagebox.askyesno(
+                            "Active Chat Session",
+                            f"You have an active chat. End current session and accept new request from {from_email}?"
+                        )
+                        if not result:
+                            # Decline silently
+                            self.firebase_manager.respond_to_chat_request(
+                                request_data['from_uid'],
+                                request_id,
+                                False
+                            )
+                            continue
+                        self._end_current_chat_session()
+                    
                     # Accept request
                     local_ip, local_port = self.network_manager.get_local_address()
                     self.firebase_manager.respond_to_chat_request(
@@ -563,33 +1086,28 @@ class GUIManager:
                         local_ip
                     )
                     
-                    # Create integrated chat interface immediately for the accepter
+                    # Start new chat session
                     try:
                         # Get the requester's connection info from the request
                         requester_ip = request_data.get('sender_ip', 'unknown')
                         requester_port = request_data.get('sender_port', 8888)
                         peer_id = f"{requester_ip}:{requester_port}"
                         
-                        # Create integrated chat interface
-                        self._create_integrated_chat(peer_id, from_email)
+                        # Start chat session
+                        self._start_chat_session(peer_id, from_email)
                         
-                        # Switch to chat view
-                        self._switch_view("chats")
+                        # Add system message
+                        self._add_system_message_to_chat("🔄 Establishing connection...")
+                        self._add_system_message_to_chat("✅ Ready to receive messages")
                         
-                        # Show connecting message  
-                        self._add_system_message_integrated(peer_id, "🔄 Establishing connection...")
-                        
-                        # The requester should connect to us, but we can also try connecting
-                        # Note: In a real P2P system, usually the requester initiates the connection
-                        self._add_system_message_integrated(peer_id, "✅ Ready to receive messages")
                         self.notification_manager.notify_chat_started(from_email)
                         
                     except Exception as e:
-                        print(f"Error creating integrated chat for accepted request: {e}")
+                        print(f"Error starting chat session for accepted request: {e}")
                         messagebox.showwarning(
-                            "Chat Interface Error",
-                            f"Request accepted but failed to open chat interface.\n"
-                            f"The other user should still be able to connect."
+                            "Chat Session Error",
+                            f"Request accepted but failed to start chat session.\n"
+                            f"Error: {str(e)}"
                         )
                 else:
                     # Decline request
@@ -667,28 +1185,34 @@ class GUIManager:
             )
             
             if result:
-                # Start actual chat session with the target
+                # Check if already in active session
+                if self.active_chat_session:
+                    result = messagebox.askyesno(
+                        "Active Chat Session",
+                        f"You have an active chat. End current session and start new chat with {target_email}?"
+                    )
+                    if not result:
+                        return
+                    self._end_current_chat_session()
+                
+                # Start new chat session
                 try:
-                    # Connect to peer via network manager
                     peer_id = f"{target_ip}:{target_port}"
                     
-                    # Create integrated chat interface first
-                    self._create_integrated_chat(peer_id, target_email)
+                    # Start chat session
+                    self._start_chat_session(peer_id, target_email)
                     
-                    # Switch to chat view
-                    self._switch_view("chats")
-                    
-                    # Show connecting message
-                    self._add_system_message_integrated(peer_id, "🔄 Connecting to peer...")
+                    # Add system messages
+                    self._add_system_message_to_chat("🔄 Connecting to peer...")
                     
                     # Try to connect to the peer with retry
                     connection_success = self._connect_to_peer_with_retry(peer_id, target_ip, target_port, target_email)
                     
                     if connection_success:
-                        self._add_system_message_integrated(peer_id, "✅ Connected successfully!")
+                        self._add_system_message_to_chat("✅ Connected successfully!")
                         self.notification_manager.notify_chat_started(target_email)
                     else:
-                        self._add_system_message_integrated(peer_id, "❌ Connection failed. You can still send messages when peer comes online.")
+                        self._add_system_message_to_chat("❌ Connection failed. You can still send messages when peer comes online.")
                     
                 except Exception as e:
                     messagebox.showerror(
@@ -1116,23 +1640,28 @@ class GUIManager:
         return False
     
     def _handle_integrated_text_message(self, message: Dict[str, Any], peer_id: str):
-        """Handle incoming text message for integrated chat."""
+        """Handle incoming text message for active chat session."""
         try:
             content = message.get('content', '')
             sender_email = message.get('sender', 'Unknown')
             
-            # Add message to integrated chat if it exists
-            if hasattr(self, 'integrated_chat_widgets') and peer_id in self.integrated_chat_widgets:
-                self._add_message_integrated(peer_id, sender_email, content, is_own=False)
+            # Check if message is from active chat session
+            if self.active_chat_session and self.active_chat_session['peer_id'] == peer_id:
+                # Add message to active chat
+                sender_name = sender_email.split('@')[0] if '@' in sender_email else sender_email
+                self._add_message_to_chat(sender_name, content, is_own=False)
                 
-                # Show notification if chat is not currently active
-                if not hasattr(self, 'active_chat') or self.active_chat != peer_id:
+                # Show notification if not currently viewing chat
+                if self.current_view != "chat":
                     if self.notification_manager:
                         self.notification_manager.notify_new_message(sender_email, content)
             else:
-                print(f"Received message for unknown peer: {peer_id}")
+                print(f"Received message from peer not in active session: {peer_id}")
+                # Optionally show notification for unsolicited message
+                if self.notification_manager:
+                    self.notification_manager.notify_new_message(sender_email, f"Unsolicited message: {content}")
         except Exception as e:
-            print(f"Error handling integrated text message: {e}")
+            print(f"Error handling text message: {e}")
     
     def _handle_integrated_session_key(self, message: Dict[str, Any], peer_id: str):
         """Handle session key exchange for integrated chat."""
