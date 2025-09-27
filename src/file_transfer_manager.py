@@ -33,9 +33,9 @@ class FileTransferManager:
         self.notification_manager = notification_manager
         
         self.chunk_size = config.get('network.file_chunk_size', 4096)
-        self.downloads_dir = Path.home() / "Downloads" / "CipherNet"
-        self.downloads_dir.mkdir(parents=True, exist_ok=True)
-        
+        self.downloads_dir = str(Path(__file__).parent.parent / "downloads")
+        Path(self.downloads_dir).mkdir(parents=True, exist_ok=True)
+
         # File transfer tracking
         self.active_transfers = {}  # {transfer_id: transfer_info}
         self.transfer_callbacks = {}  # {transfer_id: callback}

@@ -18,6 +18,7 @@ from network_manager import NetworkManager
 from firebase_manager import FirebaseManager
 from file_transfer_manager import FileTransferManager
 from notification_manager import NotificationManager
+from cleanup_manager import cleanup_old_requests
 
 
 class GUIManager:
@@ -282,6 +283,10 @@ class GUIManager:
         if success:
             self.current_user = self.auth_manager.get_current_user()
             self.notification_manager.notify_authentication_success(self.current_user['email'])
+            
+            # Clean up old accepted requests in background
+            self._cleanup_old_requests()
+            
             self.show_main_screen()
         else:
             self.status_label.configure(text=f"Login failed: {message}")
@@ -459,28 +464,57 @@ class GUIManager:
                     # Show notification that request was accepted
                     self.notification_manager.notify_chat_accepted(target_email)
                     
-                    # Show connection dialog
-                    result = messagebox.askyesno(
-                        "Chat Request Accepted",
-                        f"{target_email} accepted your chat request!\n\n"
-                        f"Connection details:\nIP: {target_ip}\nPort: {target_port}\n\n"
-                        f"Start secure chat session?"
-                    )
-                    
-                    if result:
-                        # TODO: Start chat session with the target
-                        messagebox.showinfo(
-                            "Chat Session", 
-                            f"Starting secure chat with {target_email}\n"
-                            f"Connecting to {target_ip}:{target_port}"
-                        )
-                    
-                    # Clean up the request after handling
+                    # Clean up the request FIRST to prevent duplicates
                     request_path = f"requests/{request['target_uid']}/{request['request_id']}"
                     self.firebase_manager._delete_data(request_path)
+                    
+                    # Schedule dialog display on main thread
+                    self.root.after(0, self._show_chat_accepted_dialog, 
+                                   target_email, target_ip, target_port, request)
                 
         except Exception as e:
             print(f"Error checking chat responses: {e}")
+
+    def _show_chat_accepted_dialog(self, target_email: str, target_ip: str, 
+                                  target_port: int, request: Dict[str, Any]):
+        """Show chat accepted dialog on main thread."""
+        try:
+            # Show connection dialog
+            result = messagebox.askyesno(
+                "Chat Request Accepted",
+                f"{target_email} accepted your chat request!\n\n"
+                f"Connection details:\nIP: {target_ip}\nPort: {target_port}\n\n"
+                f"Start secure chat session?"
+            )
+            
+            if result:
+                # TODO: Start chat session with the target
+                messagebox.showinfo(
+                    "Chat Session", 
+                    f"Starting secure chat with {target_email}\n"
+                    f"Connecting to {target_ip}:{target_port}"
+                )
+            
+            # Request was already cleaned up before dialog
+            
+        except Exception as e:
+            print(f"Error showing chat accepted dialog: {e}")
+
+    def _cleanup_old_requests(self):
+        """Clean up old accepted requests in background thread."""
+        def cleanup_worker():
+            try:
+                cleaned_count = cleanup_old_requests(
+                    self.auth_manager, 
+                    self.firebase_manager, 
+                    silent=True
+                )
+                if cleaned_count > 0:
+                    print(f"🧹 Cleaned up {cleaned_count} old chat requests")
+            except Exception as e:
+                print(f"Cleanup error: {e}")
+        
+        threading.Thread(target=cleanup_worker, daemon=True).start()
 
     def _clear_current_frame(self):
         """Clear the current frame."""

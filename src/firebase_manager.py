@@ -570,9 +570,12 @@ class FirebaseManager:
         """
         try:
             url = f"{self.database_url}/{path}.json"
-            headers = self.auth_manager.get_auth_headers()
             
-            response = requests.delete(url, headers=headers, timeout=10)
+            # Add auth token as query parameter
+            if hasattr(self.auth_manager, 'id_token') and self.auth_manager.id_token:
+                url += f"?auth={self.auth_manager.id_token}"
+            
+            response = requests.delete(url, timeout=10)
             
             return response.status_code == 200
             

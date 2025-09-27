@@ -16,6 +16,7 @@ sys.path.append(str(Path(__file__).parent))
 from gui_manager import GUIManager
 from auth_manager import AuthManager
 from config import Config
+from cleanup_manager import cleanup_old_requests
 
 
 def main():
