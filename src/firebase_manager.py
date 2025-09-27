@@ -327,6 +327,34 @@ class FirebaseManager:
             print(f"Failed to set chat as terminated: {e}")
             return False
     
+    def delete_chat_session(self, chat_id: str) -> bool:
+        """
+        Instantly delete chat session data from Firebase Realtime Database.
+        This completely removes the chat data when the session is terminated.
+        
+        Args:
+            chat_id: Chat identifier to delete
+        
+        Returns:
+            True if deleted successfully, False otherwise
+        """
+        try:
+            chat_path = f"chats/{chat_id}"
+            print(f"🗑️ INSTANTLY deleting chat session data: {chat_id}")
+            
+            result = self._delete_data(chat_path)
+            
+            if result:
+                print(f"✅ Chat session {chat_id} deleted successfully from Firebase")
+            else:
+                print(f"❌ Failed to delete chat session {chat_id} from Firebase")
+            
+            return result
+            
+        except Exception as e:
+            print(f"Failed to delete chat session {chat_id}: {e}")
+            return False
+    
     def check_sent_requests_responses(self) -> List[Dict[str, Any]]:
         """
         Check for responses to chat requests we sent.

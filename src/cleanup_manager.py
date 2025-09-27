@@ -1,13 +1,5 @@
 """
-Cleanup module to remove s        stats = {
-            \"accepted_requests\": 0,
-            \"pending_requests\": 0, 
-            \"marked_inactive_chats\": 0,
-            \"deleted_inactive_chats\": 0,
-            \"own_presence\": 0,
-            \"session_cleanup\": 0,
-            \"total_cleaned\": 0
-        }a
+Cleanup module to remove stale data from Firebase.
 
 Author: Arjun Christopher
 """
@@ -42,6 +34,7 @@ def comprehensive_cleanup(auth_manager, firebase_manager, silent=True):
             "pending_requests": 0, 
             "marked_inactive_chats": 0,
             "deleted_inactive_chats": 0,
+            "deleted_active_chats": 0,
             "own_presence": 0,
             "total_cleaned": 0
         }
@@ -82,6 +75,7 @@ def comprehensive_cleanup(auth_manager, firebase_manager, silent=True):
             print(f"  - Stale pending requests: {stats['pending_requests']}")
             print(f"  - Marked inactive chats: {stats['marked_inactive_chats']}")
             print(f"  - Deleted inactive chats: {stats['deleted_inactive_chats']}")
+            print(f"  - Deleted active chats: {stats['deleted_active_chats']}")
             print(f"  - Own presence: {stats['own_presence']}")
             print(f"  - Session cleanup: {stats['session_cleanup']}")
         
@@ -298,6 +292,64 @@ def cleanup_user_chats_on_exit(firebase_manager, current_uid, silent=True):
         if not silent:
             print(f"❌ Chat cleanup failed: {e}")
         return {"marked_inactive": 0, "deleted_chats": 0, "total_processed": 0}
+
+
+def _delete_user_active_chats(firebase_manager, current_uid, silent):
+    """
+    INSTANTLY delete all active chat sessions involving the current user.
+    
+    Args:
+        firebase_manager: FirebaseManager instance
+        current_uid: Current user's UID
+        silent: If True, suppress output messages
+        
+    Returns:
+        int: Number of active chats deleted
+    """
+    cleaned_count = 0
+    
+    try:
+        if not silent:
+            print(f"    🔍 Looking for active chats to delete instantly")
+        
+        # Read all chats
+        chats_data = firebase_manager._read_data("chats")
+        
+        if chats_data:
+            if not silent:
+                print(f"    📊 Found {len(chats_data)} total chats in database")
+            
+            for chat_id, chat_data in chats_data.items():
+                if isinstance(chat_data, dict):
+                    participants = chat_data.get('participants', {})
+                    status = chat_data.get('status', 'active')
+                    
+                    # Check if current user is a participant in this chat
+                    if current_uid in participants:
+                        if not silent:
+                            print(f"    💬 Found user's chat {chat_id}: status={status}")
+                        
+                        # Delete ALL chats involving this user (active, terminated, etc.)
+                        if firebase_manager.delete_chat_session(chat_id):
+                            cleaned_count += 1
+                            if not silent:
+                                print(f"    ✅ INSTANTLY deleted chat session: {chat_id}")
+                        else:
+                            if not silent:
+                                print(f"    ❌ Failed to delete chat session: {chat_id}")
+                    elif not silent:
+                        print(f"    ⏭️  Chat {chat_id} doesn't involve user, skipping")
+        else:
+            if not silent:
+                print(f"    📭 No chats found in database")
+    
+    except Exception as e:
+        if not silent:
+            print(f"    ❌ Error deleting active chats: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    return cleaned_count
 
 
 def cleanup_old_requests(auth_manager, firebase_manager, silent=True):

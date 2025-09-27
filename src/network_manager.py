@@ -33,6 +33,7 @@ class NetworkManager:
         self.is_running = False
         self.local_ip = self._get_local_ip()
         self.port = config.get('network.default_port', 8888)
+        self.connection_closed_callback = None  # Callback for connection closures
         
         # Threading
         self.server_thread = None
@@ -225,6 +226,15 @@ class NetworkManager:
             handler: Callback function to handle the message
         """
         self.message_handlers[message_type] = handler
+    
+    def register_connection_closed_callback(self, callback: Callable):
+        """
+        Register a callback for when connections are closed.
+        
+        Args:
+            callback: Function to call when connection is closed (receives peer_id)
+        """
+        self.connection_closed_callback = callback
     
     def get_local_address(self) -> Tuple[str, int]:
         """
@@ -461,6 +471,13 @@ class NetworkManager:
             del self.connection_threads[peer_id]
         
         print(f"Connection to {peer_id} closed")
+        
+        # Notify about connection closure for chat cleanup
+        if hasattr(self, 'connection_closed_callback') and self.connection_closed_callback:
+            try:
+                self.connection_closed_callback(peer_id)
+            except Exception as e:
+                print(f"Error in connection closed callback: {e}")
     
     def _get_local_ip(self) -> str:
         """

@@ -200,6 +200,7 @@ class GUIManager:
         self.network_manager.register_message_handler('text_message', self._handle_text_message)
         self.network_manager.register_message_handler('session_key', self._handle_session_key)
         self.network_manager.register_message_handler('chat_terminated', self._handle_chat_termination)
+        self.network_manager.register_connection_closed_callback(self._handle_network_disconnection)
         
         # Start user discovery
         self._start_user_discovery()
@@ -1120,13 +1121,16 @@ class GUIManager:
             chat_terminate_success = self.firebase_manager.set_chat_terminated(chat_id, current_uid)
             print(f"📊 Firebase updates - Participant: {participant_update_success}, Chat: {chat_terminate_success}")
             
-            # If network message failed and this is critical, give Firebase more time
-            delay = 3000 if not network_message_sent else 2000
-            print(f"⏱️ Using {delay}ms delay before stopping listener (network_sent: {network_message_sent})")
-            # Longer delay before stopping listener to ensure peer gets the update
-            # This is critical when network messages fail and Firebase is the backup
+            # Schedule instant deletion of chat session data after giving peer time to see termination
+            deletion_delay = 5000 if not network_message_sent else 3000  # Longer delay if network failed
+            print(f"⏱️ Scheduling chat data deletion in {deletion_delay}ms (network_sent: {network_message_sent})")
+            
+            # Stop listener first, then delete chat data
             if not self._is_shutting_down:
-                self.root.after(delay, lambda: self.firebase_manager.stop_listening(f"chats/{chat_id}"))
+                # Stop listening to chat updates
+                self.root.after(2000, lambda: self.firebase_manager.stop_listening(f"chats/{chat_id}"))
+                # Delete chat session data from Firebase after delay
+                self.root.after(deletion_delay, lambda: self._delete_chat_session_data(chat_id))
         
         # Clear session data
         session_keys = [f"{current_uid}-{peer_uid}", f"{peer_uid}-{current_uid}"]
@@ -1359,6 +1363,11 @@ class GUIManager:
                 print(f"🚨 Chat terminated by peer {terminated_by}, handling termination")
                 # Chat was terminated by the peer, terminate our side too
                 self.root.after(0, lambda: self._handle_peer_chat_termination())
+                # Schedule deletion of the terminated chat data
+                chat_id = self.active_chat_session.get('chat_id', '') if self.active_chat_session else ''
+                if chat_id and not self._is_shutting_down:
+                    print(f"🗑️ Scheduling cleanup of terminated chat data: {chat_id}")
+                    self.root.after(3000, lambda: self._delete_chat_session_data(chat_id))
                 return
             
             # Also check individual participant status for backward compatibility
@@ -1399,6 +1408,7 @@ class GUIManager:
             return
         
         peer_email = self.active_chat_session.get('email', 'Unknown')
+        chat_id = self.active_chat_session.get('chat_id', '')
         print(f"🚨 Handling peer termination from {peer_email}")
         
         # Show notification that peer ended the chat
@@ -1407,14 +1417,33 @@ class GUIManager:
             f"{peer_email} has ended the chat session."
         )
         
-        # End chat session without showing confirmation
+        # End chat session without showing confirmation (this won't trigger deletion since peer initiated)
         print(f"🔄 Ending chat session without confirmation")
         self._end_chat_session(show_confirmation=False)
+        
+        # Since peer terminated, also delete chat data after a short delay
+        if chat_id and not self._is_shutting_down:
+            print(f"🗑️ Scheduling chat data deletion after peer termination")
+            self.root.after(2000, lambda: self._delete_chat_session_data(chat_id))
         
         # Ensure redirection to dashboard after notification
         print(f"📍 Scheduling dashboard redirect")
         if not self._is_shutting_down:
             self.root.after(200, self._ensure_dashboard_redirect)
+    
+    def _delete_chat_session_data(self, chat_id: str):
+        """Delete chat session data from Firebase after termination."""
+        try:
+            print(f"🗑️ Executing instant deletion of chat session data: {chat_id}")
+            success = self.firebase_manager.delete_chat_session(chat_id)
+            
+            if success:
+                print(f"✅ Chat session data for {chat_id} deleted successfully")
+            else:
+                print(f"❌ Failed to delete chat session data for {chat_id}")
+                
+        except Exception as e:
+            print(f"❌ Error deleting chat session data for {chat_id}: {e}")
     
     def _ensure_dashboard_redirect(self):
         """Ensure user is redirected to dashboard/map view after chat termination."""
@@ -1579,3 +1608,51 @@ class GUIManager:
             print(f"Error during cleanup: {e}")
         finally:
             self.root.destroy()
+    def _handle_network_disconnection(self, peer_id):
+        print(f" Network disconnection detected for peer: {peer_id}")
+        
+        # If we have an active chat with this peer, clean up the chat data
+        if (self.active_chat_session and 
+            self.active_chat_session.get('uid') == peer_id):
+            
+            chat_id = self.active_chat_session.get('chat_id', '')
+            print(f" Active chat {chat_id} disconnected, scheduling cleanup")
+            
+            # Schedule chat termination and cleanup after a delay
+            # This gives time for the peer to reconnect if it's a temporary issue
+            if chat_id and not self._is_shutting_down:
+                self.root.after(10000, lambda: self._cleanup_disconnected_chat(chat_id, peer_id))
+    def _handle_network_disconnection(self, peer_id):
+        """Handle network disconnection from peer."""
+        print(f"🔌 Network disconnection detected for peer: {peer_id}")
+        
+        # If we have an active chat with this peer, clean up the chat data
+        if (self.active_chat_session and 
+            self.active_chat_session.get('uid') == peer_id):
+            
+            chat_id = self.active_chat_session.get('chat_id', '')
+            print(f"💬 Active chat {chat_id} disconnected, scheduling cleanup")
+            
+            # Schedule chat termination and cleanup after a delay
+            # This gives time for the peer to reconnect if it's a temporary issue
+            if chat_id and not self._is_shutting_down:
+                self.root.after(10000, lambda: self._cleanup_disconnected_chat(chat_id, peer_id))
+    
+    def _cleanup_disconnected_chat(self, chat_id, peer_id):
+        """Clean up chat data after network disconnection."""
+        try:
+            # Check if chat session is still active and peer is still disconnected
+            if (self.active_chat_session and 
+                self.active_chat_session.get('chat_id') == chat_id and
+                peer_id not in self.network_manager.get_connected_peers()):
+                
+                print(f"🧹 Cleaning up disconnected chat {chat_id} with peer {peer_id}")
+                
+                # End the chat session
+                self._end_chat_session(show_confirmation=False)
+                
+                # Delete the chat data
+                self._delete_chat_session_data(chat_id)
+                
+        except Exception as e:
+            print(f"❌ Error cleaning up disconnected chat: {e}")
