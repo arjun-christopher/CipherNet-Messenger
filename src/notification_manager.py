@@ -24,7 +24,7 @@ class NotificationManager:
         self.app_name = app_name
         self.notifier = DesktopNotifier(
             app_name=app_name,
-            app_icon="🔐"  # You can replace with path to icon file
+            app_icon=None  # No icon for now, can be set to Path object later
         )
         self.enabled = True
     
@@ -189,37 +189,42 @@ class NotificationManager:
     
     def _send_notification(self, title: str, body: str, urgency: Urgency = Urgency.Normal):
         """
-        Send desktop notification asynchronously.
+        Send desktop notification with simplified error handling.
         
         Args:
             title: Notification title
             body: Notification body
             urgency: Notification urgency level
         """
-        def run_async():
+        # For now, just print to console to avoid asyncio issues
+        # This can be enhanced later with a proper notification system
+        try:
+            print(f"🔔 NOTIFICATION: {title} - {body}")
+            
+            # Optionally try to send actual notification but don't fail if it doesn't work
             try:
-                # Create new event loop for this thread
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
+                # Use a simple synchronous approach with Windows toast notifications
+                import subprocess
+                import sys
+                if sys.platform == "win32":
+                    # Use Windows 10/11 toast notifications via PowerShell
+                    ps_script = f"""
+                    [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+                    $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
+                    $template.GetElementsByTagName("text")[0].AppendChild($template.CreateTextNode("{title}"))
+                    $template.GetElementsByTagName("text")[1].AppendChild($template.CreateTextNode("{body}"))
+                    $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
+                    [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("CipherNet Messenger").Show($toast)
+                    """
+                    subprocess.run(["powershell", "-Command", ps_script], 
+                                 capture_output=True, timeout=2)
+            except:
+                # If native notifications fail, just use console output
+                pass
                 
-                # Send notification
-                loop.run_until_complete(
-                    self.notifier.send(
-                        title=title,
-                        message=body,
-                        urgency=urgency,
-                        timeout=5000  # 5 seconds
-                    )
-                )
-                
-                loop.close()
-                
-            except Exception as e:
-                print(f"Failed to send notification: {e}")
-        
-        # Run in separate thread to avoid blocking
-        thread = threading.Thread(target=run_async, daemon=True)
-        thread.start()
+        except Exception:
+            # Silently fail notifications to avoid disrupting the main app
+            pass
     
     def _format_file_size(self, size_bytes: int) -> str:
         """

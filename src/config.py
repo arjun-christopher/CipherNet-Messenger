@@ -40,7 +40,7 @@ class Config:
         """Initialize configuration with default values."""
         # Load environment variables from .env file
         env_path = Path(__file__).parent.parent / ".env"
-        load_dotenv(env_path)
+        load_dotenv(str(env_path))
         
         self.config_file = Path(__file__).parent.parent / config_file
         self.config_data = self._load_default_config()

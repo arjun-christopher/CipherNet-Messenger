@@ -8,7 +8,7 @@ Author: Arjun Christopher
 import os
 import hashlib
 import hmac
-from typing import Tuple, bytes, Optional
+from typing import Tuple, Optional
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP, Blowfish
 from Crypto.Hash import SHA256

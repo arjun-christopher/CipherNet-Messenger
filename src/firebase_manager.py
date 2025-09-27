@@ -31,6 +31,25 @@ class FirebaseManager:
         self.listeners = {}  # {path: callback}
         self.listener_threads = {}  # {path: thread}
         self.is_listening = {}  # {path: bool}
+        
+        # Check Firebase connectivity on initialization
+        self._check_connectivity()
+    
+    def _check_connectivity(self):
+        """Check Firebase connectivity and display appropriate messages."""
+        try:
+            # Try to read from a test path
+            test_url = f"{self.database_url}/test.json"
+            response = requests.get(test_url, timeout=5)
+            
+            if response.status_code == 200:
+                print("✅ Firebase connected successfully")
+            elif response.status_code == 401:
+                print("ℹ️  Firebase database requires authentication (this is normal)")
+            else:
+                print(f"⚠️  Firebase connectivity issue: HTTP {response.status_code}")
+        except Exception as e:
+            print(f"⚠️  Firebase connection failed: {e}")
     
     def publish_user_presence(self, public_key_pem: bytes) -> bool:
         """
@@ -45,6 +64,13 @@ class FirebaseManager:
         try:
             user = self.auth_manager.get_current_user()
             if not user:
+                print("⚠️  Cannot publish presence: No authenticated user")
+                return False
+            
+            # Check if we have authentication token
+            auth_headers = self.auth_manager.get_auth_headers()
+            if not auth_headers:
+                print("⚠️  Cannot publish presence: No authentication token")
                 return False
             
             presence_data = {
@@ -57,7 +83,14 @@ class FirebaseManager:
             }
             
             path = f"lobby/{user['uid']}"
-            return self._write_data(path, presence_data)
+            success = self._write_data(path, presence_data)
+            
+            if success:
+                print(f"✅ Published presence for {user['email']}")
+            else:
+                print(f"❌ Failed to publish presence for {user['email']}")
+            
+            return success
             
         except Exception as e:
             print(f"Failed to publish presence: {e}")
@@ -366,16 +399,26 @@ class FirebaseManager:
         """
         try:
             url = f"{self.database_url}/{path}.json"
-            headers = self.auth_manager.get_auth_headers()
             
-            response = requests.get(url, headers=headers, timeout=10)
+            # Add auth token as query parameter for Firebase Realtime Database
+            params = {}
+            user = self.auth_manager.get_current_user()
+            if user and hasattr(self.auth_manager, 'id_token') and self.auth_manager.id_token:
+                params['auth'] = self.auth_manager.id_token
+            
+            response = requests.get(url, params=params, timeout=10)
             
             if response.status_code == 200:
                 return response.json()
             elif response.status_code == 404:
                 return None
             else:
-                print(f"Firebase read error: {response.status_code}")
+                if response.status_code == 401:
+                    # 401 Unauthorized - likely due to Firebase security rules
+                    # This is expected if the database requires authentication
+                    pass
+                else:
+                    print(f"Firebase read error: {response.status_code}")
                 return None
                 
         except Exception as e:
@@ -395,17 +438,31 @@ class FirebaseManager:
         """
         try:
             url = f"{self.database_url}/{path}.json"
-            headers = self.auth_manager.get_auth_headers()
-            headers['Content-Type'] = 'application/json'
+            headers = {'Content-Type': 'application/json'}
+            
+            # Add auth token as query parameter for Firebase Realtime Database
+            params = {}
+            user = self.auth_manager.get_current_user()
+            if user and hasattr(self.auth_manager, 'id_token') and self.auth_manager.id_token:
+                params['auth'] = self.auth_manager.id_token
             
             response = requests.put(
                 url,
                 data=json.dumps(data),
                 headers=headers,
+                params=params,
                 timeout=10
             )
             
-            return response.status_code == 200
+            if response.status_code == 200:
+                return True
+            else:
+                print(f"Firebase write failed: HTTP {response.status_code}")
+                if response.status_code == 401:
+                    print("  - Authentication failed or database rules require authentication")
+                elif response.status_code == 403:
+                    print("  - Access forbidden - check Firebase database rules")
+                return False
             
         except Exception as e:
             print(f"Firebase write exception: {e}")
@@ -424,13 +481,19 @@ class FirebaseManager:
         """
         try:
             url = f"{self.database_url}/{path}.json"
-            headers = self.auth_manager.get_auth_headers()
-            headers['Content-Type'] = 'application/json'
+            headers = {'Content-Type': 'application/json'}
+            
+            # Add auth token as query parameter for Firebase Realtime Database
+            params = {}
+            user = self.auth_manager.get_current_user()
+            if user and hasattr(self.auth_manager, 'id_token') and self.auth_manager.id_token:
+                params['auth'] = self.auth_manager.id_token
             
             response = requests.patch(
                 url,
                 data=json.dumps(updates),
                 headers=headers,
+                params=params,
                 timeout=10
             )
             

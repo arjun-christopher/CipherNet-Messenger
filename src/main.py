@@ -4,7 +4,6 @@ CipherNet Messenger - Main Application Entry Point
 A secure P2P messenger with hybrid RSA-Blowfish encryption.
 
 Author: Arjun Christopher
-License: MIT
 """
 
 import sys
