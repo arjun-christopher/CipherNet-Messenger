@@ -1822,9 +1822,9 @@ class GUIManager:
             f"{peer_email} has ended the chat session."
         )
         
-        # Get current user info before ending session
+        # Get current user info and peer info before ending session
         current_uid = self.current_user.get('uid', '') if self.current_user else ''
-        peer_uid = self.active_chat_session.get('uid', '')
+        peer_uid = self.active_chat_session.get('uid', '') if self.active_chat_session else ''
         
         # Clean up chat requests between users
         if current_uid and peer_uid:
