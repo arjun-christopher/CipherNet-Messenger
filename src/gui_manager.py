@@ -691,34 +691,75 @@ class GUIManager:
                     self._show_session_error("Connection information not available")
                     return
                 
-                # Extract peer's IP and port
-                participants = chat_info.get('participants', {})
-                peer_info = participants.get(peer_uid, {})
-                peer_ip = peer_info.get('ip', '')
-                peer_port = peer_info.get('port', 8888)
+                # Check if there's already an established session with this user's public key
+                established_sessions = self.network_manager.get_established_sessions()
+                peer_already_connected = False
+                actual_peer_id = peer_uid
                 
-                if not peer_ip:
-                    print(f"❌ No IP address available for {peer_email}")
-                    self._show_session_error("Peer IP address not available")
-                    return
+                # Look for existing session with matching public key
+                for session_peer_id, session_info in established_sessions.items():
+                    session_public_key = session_info.get('peer_public_key')
+                    if session_public_key and session_public_key.decode('utf-8') == peer_public_key:
+                        print(f"✅ Found existing secure session with {peer_email} using peer ID {session_peer_id}")
+                        peer_already_connected = True
+                        actual_peer_id = session_peer_id
+                        break
                 
-                print(f"🌐 Connecting to {peer_email} at {peer_ip}:{peer_port}")
+                # If no established session, check for connected peers
+                if not peer_already_connected:
+                    connected_peers = self.network_manager.get_connected_peers()
+                    
+                    # Check for existing connections (peer might have connected with different ID format)
+                    for connected_peer_id in connected_peers:
+                        if (connected_peer_id == peer_uid or 
+                            connected_peer_id.startswith('peer_')):
+                            print(f"✅ Peer {peer_email} already connected as {connected_peer_id}")
+                            peer_already_connected = True
+                            actual_peer_id = connected_peer_id
+                            break
                 
-                # Connect to peer
-                if not self.network_manager.connect_to_peer(peer_ip, peer_port, peer_uid):
-                    print(f"❌ Failed to connect to {peer_email}")
-                    self._show_session_error("Failed to establish network connection")
+                if not peer_already_connected:
+                    # Extract peer's IP and port for outbound connection
+                    participants = chat_info.get('participants', {})
+                    peer_info = participants.get(peer_uid, {})
+                    peer_ip = peer_info.get('ip', '')
+                    peer_port = peer_info.get('port', 8888)
+                    
+                    if not peer_ip:
+                        print(f"❌ No IP address available for {peer_email}")
+                        self._show_session_error("Peer IP address not available")
+                        return
+                    
+                    print(f"🌐 Connecting to {peer_email} at {peer_ip}:{peer_port}")
+                    
+                    # Connect to peer
+                    if not self.network_manager.connect_to_peer(peer_ip, peer_port, peer_uid):
+                        print(f"❌ Failed to connect to {peer_email}")
+                        self._show_session_error("Failed to establish network connection")
+                        return
+                else:
+                    print(f"🔗 Using existing connection to {peer_email}")
+                    # Update the active session with the actual peer ID
+                    self.active_chat_session['actual_peer_id'] = actual_peer_id
+                
+                # Use the actual peer ID (might be different from UID if peer connected first)
+                session_peer_id = self.active_chat_session.get('actual_peer_id', peer_uid)
+                
+                # Check if session is already established
+                if self.network_manager.is_session_established(session_peer_id):
+                    print(f"✅ Session already established with {peer_email}")
+                    self._on_session_established(session_peer_id, True, "Session already established")
                     return
                 
                 # Register session establishment callback
                 self.network_manager.register_session_establishment_callback(
-                    peer_uid, self._on_session_established
+                    session_peer_id, self._on_session_established
                 )
                 
                 # Initiate secure session with RSA-2048 key exchange
-                if self.network_manager.initiate_secure_session(peer_uid, peer_public_key_pem, 
+                if self.network_manager.initiate_secure_session(session_peer_id, peer_public_key_pem, 
                                                                self._on_session_established):
-                    print(f"🔑 RSA-2048 key exchange initiated with {peer_email}")
+                    print(f"🔑 RSA-2048 key exchange initiated with {peer_email} (peer_id: {session_peer_id})")
                     
                     # Update status to show key exchange in progress
                     self.chat_status_label.configure(
@@ -1123,9 +1164,11 @@ class GUIManager:
         
         try:
             peer_uid = self.active_chat_session.get('uid', '')
+            # Use actual peer ID if available (for cases where peer connected with different ID)
+            actual_peer_id = self.active_chat_session.get('actual_peer_id', peer_uid)
             
             # Check if secure session is established
-            if not self.network_manager.is_session_established(peer_uid):
+            if not self.network_manager.is_session_established(actual_peer_id):
                 self._add_system_message("❌ Cannot send message: Secure session not established")
                 return
             
@@ -1137,7 +1180,7 @@ class GUIManager:
             
             # Send encrypted message via network manager
             success = self.network_manager.send_message(
-                peer_uid, 
+                actual_peer_id, 
                 "text_message", 
                 {
                     "text": message,

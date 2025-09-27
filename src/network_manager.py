@@ -9,6 +9,7 @@ import socket
 import threading
 import json
 import time
+import base64
 from typing import Callable, Optional, Dict, Any, Tuple
 from datetime import datetime
 
@@ -249,7 +250,8 @@ class NetworkManager:
                         'status': 'key_exchange_sent',
                         'initiated_at': time.time(),
                         'session_key': session_key,
-                        'protocol_version': '1.0'
+                        'protocol_version': '1.0',
+                        'peer_public_key': peer_public_key_pem
                     }
                     print(f"✅ Key exchange initiated with peer {peer_id}")
                     return True
@@ -370,6 +372,19 @@ class NetworkManager:
             Session information dictionary
         """
         return self.peer_sessions.get(peer_id, {})
+    
+    def get_established_sessions(self) -> dict:
+        """
+        Get all established sessions.
+        
+        Returns:
+            Dictionary mapping peer_id to session info for all established sessions
+        """
+        established = {}
+        for peer_id, session_info in self.peer_sessions.items():
+            if session_info.get('status') == 'established':
+                established[peer_id] = session_info
+        return established
     
     def _accept_connections(self):
         """Accept incoming connections (runs in separate thread)."""
@@ -677,18 +692,34 @@ class NetworkManager:
             print(f"🔑 Received key exchange from peer {peer_id}")
             
             key_exchange_data = message.get('key_exchange_data', {})
+            handshake_data = message.get('handshake_data', {})
+            
+            # Extract peer's public key from handshake data
+            peer_public_key_b64 = handshake_data.get('public_key', '')
+            peer_public_key_pem = None
+            if peer_public_key_b64:
+                try:
+                    peer_public_key_pem = base64.b64decode(peer_public_key_b64.encode('utf-8'))
+                except Exception as e:
+                    print(f"❌ Failed to decode peer public key: {e}")
             
             # Decrypt the session key using our private key
             session_key = self.crypto_manager.decrypt_session_key(key_exchange_data, peer_id)
             
             if session_key:
                 # Update session state
-                self.peer_sessions[peer_id] = {
+                session_info = {
                     'status': 'established',
                     'established_at': time.time(),
                     'session_key': session_key,
                     'protocol_version': message.get('protocol_version', '1.0')
                 }
+                
+                # Store peer's public key if available
+                if peer_public_key_pem:
+                    session_info['peer_public_key'] = peer_public_key_pem
+                
+                self.peer_sessions[peer_id] = session_info
                 
                 # Send session establishment confirmation
                 confirmation_message = {
