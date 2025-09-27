@@ -18,6 +18,7 @@ from network_manager import NetworkManager
 from firebase_manager import FirebaseManager
 from file_transfer_manager import FileTransferManager
 from notification_manager import NotificationManager
+from cleanup_manager import comprehensive_cleanup
 from cleanup_manager import comprehensive_cleanup, cleanup_user_chats_on_exit
 
 
@@ -163,6 +164,10 @@ class GUIManager:
         
         # Start listening for requests
         self.firebase_manager.listen_for_requests(self._handle_chat_request)
+        
+        # Setup message handlers for integrated chat
+        self.network_manager.register_message_handler('text_message', self._handle_integrated_text_message)
+        self.network_manager.register_message_handler('session_key', self._handle_integrated_session_key)
         
         # Refresh online users
         self._refresh_online_users()
@@ -639,7 +644,7 @@ class GUIManager:
                     self._create_integrated_chat(peer_id, target_email)
                     
                     # Connect to the peer
-                    self.network_manager.connect_to_peer(target_ip, target_port)
+                    self.network_manager.connect_to_peer(target_ip, target_port, peer_id)
                     
                     # Switch to chat view
                     self._switch_view("chats")
@@ -885,8 +890,25 @@ class GUIManager:
         # Add to chat display
         self._add_message_integrated(peer_id, "You", message, is_own=True)
         
-        # TODO: Send via network manager
-        # For now, just add the message to display
+        # Send via network manager
+        try:
+            if self.network_manager and hasattr(self.network_manager, 'send_message'):
+                # Create message data
+                message_data = {
+                    'type': 'text_message',
+                    'content': message,
+                    'timestamp': datetime.now().isoformat()
+                }
+                
+                # Send to peer
+                success = self.network_manager.send_message(peer_id, message_data)
+                if not success:
+                    self._add_system_message_integrated(peer_id, "⚠️ Failed to send message - connection issue")
+            else:
+                self._add_system_message_integrated(peer_id, "⚠️ Network manager not available")
+        except Exception as e:
+            print(f"Error sending message: {e}")
+            self._add_system_message_integrated(peer_id, "⚠️ Message send failed")
     
     def _add_message_integrated(self, peer_id: str, sender: str, message: str, is_own: bool = False):
         """Add message to integrated chat display."""
@@ -971,6 +993,34 @@ class GUIManager:
             font=ctk.CTkFont(size=11),
             text_color=("#718096", "#9ca3af")
         ).pack(padx=15, pady=6)
+    
+    def _handle_integrated_text_message(self, message: Dict[str, Any], peer_id: str):
+        """Handle incoming text message for integrated chat."""
+        try:
+            content = message.get('content', '')
+            sender_email = message.get('sender', 'Unknown')
+            
+            # Add message to integrated chat if it exists
+            if hasattr(self, 'integrated_chat_widgets') and peer_id in self.integrated_chat_widgets:
+                self._add_message_integrated(peer_id, sender_email, content, is_own=False)
+                
+                # Show notification if chat is not currently active
+                if not hasattr(self, 'active_chat') or self.active_chat != peer_id:
+                    if self.notification_manager:
+                        self.notification_manager.notify_new_message(sender_email, content)
+            else:
+                print(f"Received message for unknown peer: {peer_id}")
+        except Exception as e:
+            print(f"Error handling integrated text message: {e}")
+    
+    def _handle_integrated_session_key(self, message: Dict[str, Any], peer_id: str):
+        """Handle session key exchange for integrated chat."""
+        try:
+            # Add system message about key exchange
+            if hasattr(self, 'integrated_chat_widgets') and peer_id in self.integrated_chat_widgets:
+                self._add_system_message_integrated(peer_id, "🔐 Encryption keys exchanged successfully")
+        except Exception as e:
+            print(f"Error handling integrated session key: {e}")
 
 
 class ChatWindow:
