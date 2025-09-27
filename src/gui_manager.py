@@ -826,7 +826,7 @@ class GUIManager:
                     # Update security status
                     if hasattr(self, 'security_status_label') and self.security_status_label:
                         self.security_status_label.configure(
-                            text="🔐 RSA-2048 + Blowfish-256 encryption active",
+                            text="🔐 RSA-2048-OAEP + Blowfish-256-CBC + HMAC-SHA256 active",
                             text_color=("#51cf66", "#51cf66")
                         )
                     
@@ -1204,7 +1204,7 @@ class GUIManager:
                 {
                     "text": message,
                     "sender": self.current_user.get('email', 'Unknown') if self.current_user else 'Unknown',
-                    "encryption": "RSA-2048-OAEP + Blowfish-256-CBC"
+                    "encryption": "RSA-2048-OAEP + Blowfish-256-CBC + HMAC-SHA256"
                 }
             )
             
