@@ -10,6 +10,7 @@ from tkinter import messagebox, filedialog
 import customtkinter as ctk
 from typing import Dict, Any, List, Optional
 import threading
+import json
 from datetime import datetime
 from pathlib import Path
 import random
@@ -200,6 +201,8 @@ class GUIManager:
         self.network_manager.register_message_handler('text_message', self._handle_text_message)
         self.network_manager.register_message_handler('session_key', self._handle_session_key)
         self.network_manager.register_message_handler('chat_terminated', self._handle_chat_termination)
+        self.network_manager.register_message_handler('file_request', self._handle_file_request)
+        self.network_manager.register_message_handler('file_complete', self._handle_file_complete)
         self.network_manager.register_connection_closed_callback(self._handle_network_disconnection)
         
         # Start user discovery
@@ -895,6 +898,18 @@ class GUIManager:
             ))
             
         except Exception as e:
+            print(f"Error showing session error: {e}")
+    
+    def _file_transfer_progress(self, sent_bytes: int, total_bytes: int):
+        """Handle file transfer progress updates."""
+        try:
+            progress = (sent_bytes / total_bytes) * 100
+            if hasattr(self, 'current_view') and self.current_view == "chat":
+                # Update the last system message with progress
+                progress_message = f"📤 Secure file transfer: {progress:.1f}% ({sent_bytes}/{total_bytes} bytes)"
+                print(progress_message)
+        except Exception as e:
+            print(f"Error in file transfer progress: {e}")
             print(f"Error displaying session error: {e}")
     
     def _show_chat_interface(self):
@@ -1332,13 +1347,38 @@ class GUIManager:
             
             self._add_file_message_to_chat("You", file_info, is_own=True)
             
-            # TODO: Send file via network manager
-            # For now, simulate echo response
-            self.root.after(1000, lambda: self._add_message_to_chat(
-                self.active_chat_session.get('email', 'Peer'),
-                f"File received: {file_name}",
-                is_own=False
-            ))
+            # Send secure file via network manager
+            peer_uid = self.active_chat_session.get('uid', '')
+            actual_peer_id = self.active_chat_session.get('actual_peer_id', peer_uid)
+            
+            # Add system message about security
+            self._add_system_message(
+                f"🔐 Initiating secure file transfer for {file_name}\n"
+                f"   • File chunks encrypted with Blowfish-256-CBC\n"
+                f"   • Metadata authenticated with HMAC-SHA256\n"
+                f"   • File integrity protected with SHA-256 hash"
+            )
+            
+            # Start secure file transfer
+            success = self.file_transfer_manager.send_file(
+                actual_peer_id, 
+                file_path,
+                progress_callback=self._file_transfer_progress
+            )
+            
+            if not success:
+                self._add_system_message("❌ Failed to initiate secure file transfer")
+    
+    def _file_transfer_progress(self, sent_bytes: int, total_bytes: int):
+        """Handle file transfer progress updates."""
+        try:
+            progress = (sent_bytes / total_bytes) * 100
+            if hasattr(self, 'current_view') and self.current_view == "chat":
+                # Update the last system message with progress
+                progress_message = f"📤 Secure file transfer: {progress:.1f}% ({sent_bytes}/{total_bytes} bytes)"
+                print(progress_message)
+        except Exception as e:
+            print(f"Error in file transfer progress: {e}")
     
     def _add_file_message_to_chat(self, sender, file_info, is_own=False):
         """Add a file message to the chat display."""
@@ -2060,3 +2100,88 @@ class GUIManager:
                 
         except Exception as e:
             print(f"❌ Error cleaning up disconnected chat: {e}")
+    
+    def _handle_file_request(self, message: Dict[str, Any], peer_id: str):
+        """Handle incoming secure file transfer request."""
+        try:
+            if not self.active_chat_session or self.current_view != "chat":
+                return
+            
+            content = message.get('content', {})
+            
+            # Verify control message HMAC integrity
+            control_message_hmac = bytes.fromhex(content.get('control_message_hmac', ''))
+            file_metadata = {k: v for k, v in content.items() if k != 'control_message_hmac' and k != 'security_protocol'}
+            metadata_json = json.dumps(file_metadata, sort_keys=True)
+            
+            if not self.crypto_manager.verify_hmac(metadata_json, control_message_hmac, peer_id=peer_id):
+                print("❌ File request HMAC verification failed - possible tampering")
+                return
+            
+            filename = content.get('filename', 'Unknown File')
+            file_size = content.get('file_size', 0)
+            file_hash = content.get('file_hash', '')
+            
+            # Format file size
+            if file_size < 1024:
+                size_str = f"{file_size} B"
+            elif file_size < 1024 * 1024:
+                size_str = f"{file_size / 1024:.1f} KB"
+            else:
+                size_str = f"{file_size / (1024 * 1024):.1f} MB"
+            
+            # Add system message about secure file request
+            sender_email = self.active_chat_session.get('email', 'Peer')
+            self._add_system_message(
+                f"📁 Secure file transfer request from {sender_email}\n"
+                f"   • File: {filename} ({size_str})\n"
+                f"   • SHA-256: {file_hash[:16]}...\n"
+                f"   • Security: Blowfish-256-CBC + HMAC-SHA256\n"
+                f"   • Control message integrity verified ✅"
+            )
+            
+            # Show file accept dialog
+            response = messagebox.askyesno(
+                "Secure File Transfer",
+                f"Accept secure file transfer?\n\n"
+                f"File: {filename}\n"
+                f"Size: {size_str}\n"
+                f"From: {sender_email}\n\n"
+                f"Security Features:\n"
+                f"• Blowfish-256-CBC encryption\n"
+                f"• HMAC-SHA256 authentication\n"
+                f"• SHA-256 integrity verification"
+            )
+            
+            if response:
+                # Accept the file transfer
+                success = self.file_transfer_manager.accept_file_transfer(
+                    content.get('transfer_id'), peer_id
+                )
+                if success:
+                    self._add_system_message("✅ File transfer accepted - preparing to receive secure chunks")
+                else:
+                    self._add_system_message("❌ Failed to accept file transfer")
+            else:
+                # Decline the file transfer
+                self.file_transfer_manager.decline_file_transfer(
+                    content.get('transfer_id'), peer_id, "Declined by user"
+                )
+                self._add_system_message("❌ File transfer declined")
+                
+        except Exception as e:
+            print(f"❌ Error handling file request: {e}")
+    
+    def _handle_file_complete(self, message: Dict[str, Any], peer_id: str):
+        """Handle file transfer completion notification."""
+        try:
+            content = message.get('content', {})
+            success = content.get('success', False)
+            
+            if success:
+                self._add_system_message("✅ Secure file transfer completed successfully")
+            else:
+                self._add_system_message("❌ File transfer failed")
+                
+        except Exception as e:
+            print(f"❌ Error handling file completion: {e}")

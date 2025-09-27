@@ -211,21 +211,28 @@ class CryptographyManager:
         except Exception as e:
             raise CryptographyError(f"Failed to decrypt session key with PKCS#1 OAEP: {e}")
     
-    def encrypt_message(self, message: str, session_key: Optional[bytes] = None) -> bytes:
+    def encrypt_message(self, message: str, session_key: Optional[bytes] = None, peer_id: Optional[str] = None) -> bytes:
         """
         Encrypt message using Blowfish.
         
         Args:
             message: Message to encrypt
             session_key: Session key (uses stored key if None)
+            peer_id: Peer ID to get session key for (overrides session_key if provided)
         
         Returns:
             Encrypted message with IV prepended
         """
         try:
-            key = session_key or self.session_key
-            if not key:
-                raise CryptographyError("No session key available")
+            # Use peer-specific session key if peer_id provided
+            if peer_id:
+                key = self.get_session_key(peer_id)
+                if not key:
+                    raise CryptographyError(f"No session key available for peer {peer_id}")
+            else:
+                key = session_key or self.session_key
+                if not key:
+                    raise CryptographyError("No session key available")
             
             message_bytes = message.encode('utf-8')
             
@@ -242,21 +249,28 @@ class CryptographyManager:
         except Exception as e:
             raise CryptographyError(f"Failed to encrypt message: {e}")
     
-    def decrypt_message(self, encrypted_data: bytes, session_key: Optional[bytes] = None) -> str:
+    def decrypt_message(self, encrypted_data: bytes, session_key: Optional[bytes] = None, peer_id: Optional[str] = None) -> str:
         """
         Decrypt message using Blowfish.
         
         Args:
             encrypted_data: Encrypted message with IV
             session_key: Session key (uses stored key if None)
+            peer_id: Peer ID to get session key for (overrides session_key if provided)
         
         Returns:
             Decrypted message string
         """
         try:
-            key = session_key or self.session_key
-            if not key:
-                raise CryptographyError("No session key available")
+            # Use peer-specific session key if peer_id provided
+            if peer_id:
+                key = self.get_session_key(peer_id)
+                if not key:
+                    raise CryptographyError(f"No session key available for peer {peer_id}")
+            else:
+                key = session_key or self.session_key
+                if not key:
+                    raise CryptographyError("No session key available")
             
             # Extract IV and ciphertext
             iv = encrypted_data[:8]
@@ -271,28 +285,35 @@ class CryptographyManager:
         except Exception as e:
             raise CryptographyError(f"Failed to decrypt message: {e}")
     
-    def calculate_hmac(self, message: str, session_key: Optional[bytes] = None) -> bytes:
+    def calculate_hmac(self, message: str, session_key: Optional[bytes] = None, peer_id: Optional[str] = None) -> bytes:
         """
         Calculate HMAC-SHA256 for message authentication.
         
         Args:
             message: Message to authenticate
             session_key: Key for HMAC (uses stored key if None)
+            peer_id: Peer ID to get session key for (overrides session_key if provided)
         
         Returns:
             HMAC digest
         """
         try:
-            key = session_key or self.session_key
-            if not key:
-                raise CryptographyError("No session key available")
+            # Use peer-specific session key if peer_id provided
+            if peer_id:
+                key = self.get_session_key(peer_id)
+                if not key:
+                    raise CryptographyError(f"No session key available for peer {peer_id}")
+            else:
+                key = session_key or self.session_key
+                if not key:
+                    raise CryptographyError("No session key available")
             
             message_bytes = message.encode('utf-8')
             return hmac.new(key, message_bytes, hashlib.sha256).digest()
         except Exception as e:
             raise CryptographyError(f"Failed to calculate HMAC: {e}")
     
-    def verify_hmac(self, message: str, received_hmac: bytes, session_key: Optional[bytes] = None) -> bool:
+    def verify_hmac(self, message: str, received_hmac: bytes, session_key: Optional[bytes] = None, peer_id: Optional[str] = None) -> bool:
         """
         Verify HMAC-SHA256 for message authentication.
         
@@ -300,12 +321,13 @@ class CryptographyManager:
             message: Original message
             received_hmac: Received HMAC to verify
             session_key: Key for HMAC (uses stored key if None)
+            peer_id: Peer ID to get session key for (overrides session_key if provided)
         
         Returns:
             True if HMAC is valid, False otherwise
         """
         try:
-            calculated_hmac = self.calculate_hmac(message, session_key)
+            calculated_hmac = self.calculate_hmac(message, session_key, peer_id)
             return hmac.compare_digest(calculated_hmac, received_hmac)
         except Exception as e:
             raise CryptographyError(f"Failed to verify HMAC: {e}")

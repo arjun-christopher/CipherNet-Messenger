@@ -92,13 +92,26 @@ class FileTransferManager:
             if progress_callback:
                 self.transfer_callbacks[transfer_id] = progress_callback
             
-            # Send file metadata
-            file_info = {
+            # Prepare file metadata for HMAC authentication
+            file_metadata = {
                 'transfer_id': transfer_id,
                 'filename': file_path.name,
                 'file_size': file_size,
                 'file_hash': file_hash,
-                'mime_type': mimetypes.guess_type(str(file_path))[0] or 'application/octet-stream'
+                'mime_type': mimetypes.guess_type(str(file_path))[0] or 'application/octet-stream',
+                'encryption_algorithm': 'Blowfish-256-CBC',
+                'authentication_algorithm': 'HMAC-SHA256'
+            }
+            
+            # Generate HMAC for control message integrity
+            metadata_json = json.dumps(file_metadata, sort_keys=True)
+            control_message_hmac = self.crypto_manager.calculate_hmac(metadata_json, peer_id=peer_id)
+            
+            # Send authenticated file metadata
+            file_info = {
+                **file_metadata,
+                'control_message_hmac': control_message_hmac.hex(),
+                'security_protocol': 'Secure File Transfer Protocol'
             }
             
             success = self.network_manager.send_message(
@@ -319,7 +332,7 @@ class FileTransferManager:
     
     def _handle_file_chunk(self, message: Dict[str, Any], peer_id: str):
         """
-        Handle incoming file chunk.
+        Handle incoming encrypted file chunk with HMAC verification.
         
         Args:
             message: File chunk message
@@ -329,7 +342,9 @@ class FileTransferManager:
             content = message.get('content', {})
             transfer_id = content.get('transfer_id')
             chunk_index = content.get('chunk_index')
-            chunk_data = bytes.fromhex(content.get('chunk_data', ''))
+            encrypted_chunk_data = bytes.fromhex(content.get('encrypted_chunk_data', ''))
+            metadata = content.get('metadata', {})
+            metadata_hmac = bytes.fromhex(content.get('metadata_hmac', ''))
             is_last_chunk = content.get('is_last_chunk', False)
             
             if transfer_id not in self.active_transfers:
@@ -337,16 +352,33 @@ class FileTransferManager:
             
             transfer_info = self.active_transfers[transfer_id]
             
-            # Store chunk
+            # Verify metadata HMAC for chunk integrity
+            metadata_json = json.dumps(metadata, sort_keys=True)
+            if not self.crypto_manager.verify_hmac(metadata_json, metadata_hmac, peer_id=peer_id):
+                print(f"❌ HMAC verification failed for chunk {chunk_index} - possible tampering")
+                return
+            
+            # Decrypt chunk data using Blowfish with K_session
+            decrypted_chunk_hex = self.crypto_manager.decrypt_message(encrypted_chunk_data, peer_id=peer_id)
+            chunk_data = bytes.fromhex(decrypted_chunk_hex)
+            
+            # Verify chunk size matches metadata
+            if len(chunk_data) != metadata.get('chunk_size', 0):
+                print(f"❌ Chunk size mismatch for chunk {chunk_index}")
+                return
+            
+            print(f"✅ Chunk {chunk_index} decrypted and authenticated successfully")
+            
+            # Store decrypted chunk
             transfer_info['chunks'].append((chunk_index, chunk_data))
             transfer_info['bytes_received'] += len(chunk_data)
             
             # Update progress
             progress = (transfer_info['bytes_received'] / transfer_info['file_size']) * 100
-            print(f"File transfer progress: {progress:.1f}%")
+            print(f"📁 Secure file transfer progress: {progress:.1f}% (Blowfish + HMAC)")
             
             if is_last_chunk:
-                # Assemble and save file
+                # Assemble and save file with integrity verification
                 self._assemble_and_save_file(transfer_id)
                 
         except Exception as e:
@@ -419,12 +451,31 @@ class FileTransferManager:
                     
                     is_last_chunk = len(chunk) < self.chunk_size
                     
-                    # Send encrypted chunk
+                    # Encrypt chunk with Blowfish using K_session
+                    encrypted_chunk = self.crypto_manager.encrypt_message(chunk.hex(), peer_id=peer_id)
+                    
+                    # Create chunk metadata for HMAC authentication
+                    chunk_metadata = {
+                        'transfer_id': transfer_id,
+                        'chunk_index': chunk_index,
+                        'chunk_size': len(chunk),
+                        'is_last_chunk': is_last_chunk
+                    }
+                    metadata_json = json.dumps(chunk_metadata, sort_keys=True)
+                    
+                    # Generate HMAC for chunk metadata integrity
+                    metadata_hmac = self.crypto_manager.calculate_hmac(metadata_json, peer_id=peer_id)
+                    
+                    # Send encrypted chunk with authenticated metadata
                     chunk_message = {
                         'transfer_id': transfer_id,
                         'chunk_index': chunk_index,
-                        'chunk_data': chunk.hex(),
-                        'is_last_chunk': is_last_chunk
+                        'encrypted_chunk_data': encrypted_chunk.hex(),
+                        'metadata': chunk_metadata,
+                        'metadata_hmac': metadata_hmac.hex(),
+                        'is_last_chunk': is_last_chunk,
+                        'encryption': 'Blowfish-256-CBC',
+                        'authentication': 'HMAC-SHA256'
                     }
                     
                     success = self.network_manager.send_message(
@@ -480,12 +531,18 @@ class FileTransferManager:
             # Assemble file data
             file_data = b''.join(chunk[1] for chunk in chunks)
             
-            # Verify file integrity
+            # Verify file integrity using SHA-256 hash comparison
             calculated_hash = self.crypto_manager.calculate_data_hash(file_data)
             
+            print(f"🔍 Verifying file integrity using SHA-256...")
+            print(f"   Expected SHA-256: {expected_hash}")
+            print(f"   Calculated SHA-256: {calculated_hash}")
+            
             if calculated_hash != expected_hash:
-                print("File integrity check failed!")
+                print("❌ File integrity check failed! File may be corrupted or tampered with.")
                 return False
+            
+            print("✅ File integrity verified - SHA-256 hashes match")
             
             # Save file
             safe_filename = self._sanitize_filename(filename)
