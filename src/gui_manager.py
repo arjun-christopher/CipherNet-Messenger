@@ -74,6 +74,7 @@ class GUIManager:
         
         # Cleanup management
         self._cleanup_done_flag = [False]  # Use list for mutable reference
+        self._is_shutting_down = False  # Flag to prevent callbacks during shutdown
         
         # Periodic task management
         self._discovery_task_id = None
@@ -351,7 +352,8 @@ class GUIManager:
     
     def _on_canvas_resize(self, event):
         """Handle canvas resize."""
-        self.root.after(100, self._load_users_on_map)
+        if not self._is_shutting_down:
+            self.root.after(100, self._load_users_on_map)
     
     def _load_users_on_map(self):
         """Load and display users on the map."""
@@ -389,7 +391,8 @@ class GUIManager:
             return
         
         if canvas_width <= 1 or canvas_height <= 1:
-            self.root.after(100, self._load_users_on_map)
+            if not self._is_shutting_down:
+                self.root.after(100, self._load_users_on_map)
             return
         
         # Get online users
@@ -1122,7 +1125,8 @@ class GUIManager:
             print(f"⏱️ Using {delay}ms delay before stopping listener (network_sent: {network_message_sent})")
             # Longer delay before stopping listener to ensure peer gets the update
             # This is critical when network messages fail and Firebase is the backup
-            self.root.after(delay, lambda: self.firebase_manager.stop_listening(f"chats/{chat_id}"))
+            if not self._is_shutting_down:
+                self.root.after(delay, lambda: self.firebase_manager.stop_listening(f"chats/{chat_id}"))
         
         # Clear session data
         session_keys = [f"{current_uid}-{peer_uid}", f"{peer_uid}-{current_uid}"]
@@ -1140,10 +1144,12 @@ class GUIManager:
         # Return to map and refresh
         self._show_user_map()
         # Force immediate refresh of user map
-        self.root.after(100, self._load_users_on_map)
+        if not self._is_shutting_down:
+            self.root.after(100, self._load_users_on_map)
         
         # Additional redirect ensuring both users see dashboard
-        self.root.after(300, self._ensure_dashboard_redirect)
+        if not self._is_shutting_down:
+            self.root.after(300, self._ensure_dashboard_redirect)
     
     def _refresh_user_map(self):
         """Refresh the user map."""
@@ -1151,27 +1157,37 @@ class GUIManager:
     
     def _start_user_discovery(self):
         """Start periodic user discovery."""
+        # Check if shutting down
+        if self._is_shutting_down:
+            return
+            
         # Only run if we're on the map view and logged in
         if not self.current_user or self.current_view != "map":
             # Still schedule next check in case user returns to map
-            if self.current_user:  # Only continue if user is still logged in
+            if self.current_user and not self._is_shutting_down:  # Only continue if user is still logged in
                 self.root.after(5000, self._start_user_discovery)
             return
         
         self._load_users_on_map()
         # Refresh every 5 seconds
-        self.root.after(5000, self._start_user_discovery)
+        if not self._is_shutting_down:
+            self.root.after(5000, self._start_user_discovery)
     
     def _start_response_monitoring(self):
         """Start monitoring for chat request responses."""
+        # Check if shutting down
+        if self._is_shutting_down:
+            return
+            
         # Only run if user is logged in
         if not self.current_user:
             return
         
         self._check_request_responses()
-        # Check every 2 seconds for responses
-        self.root.after(2000, self._start_response_monitoring)
-    
+        # Check every 5 seconds for responses
+        if not self._is_shutting_down:
+            self.root.after(5000, self._start_response_monitoring)
+
     def _check_request_responses(self):
         """Check for responses to sent chat requests."""
         if not self.current_user or self.active_chat_session:
@@ -1201,9 +1217,9 @@ class GUIManager:
     def _start_response_monitoring(self):
         """Start monitoring for chat request responses."""
         self._check_request_responses()
-        # Check every 2 seconds for responses
-        self.root.after(2000, self._start_response_monitoring)
-    
+        # Check every 5 seconds for responses
+        self.root.after(5000, self._start_response_monitoring)
+
     def _check_request_responses(self):
         """Check for responses to sent chat requests."""
         if not self.current_user or self.active_chat_session:
@@ -1233,9 +1249,9 @@ class GUIManager:
     def _start_response_monitoring(self):
         """Start monitoring for chat request responses."""
         self._check_request_responses()
-        # Check every 2 seconds for responses
-        self.root.after(2000, self._start_response_monitoring)
-    
+        # Check every 5 seconds for responses
+        self.root.after(5000, self._start_response_monitoring)
+
     def _check_request_responses(self):
         """Check for responses to sent chat requests."""
         if not self.current_user or self.active_chat_session:
@@ -1397,16 +1413,21 @@ class GUIManager:
         
         # Ensure redirection to dashboard after notification
         print(f"📍 Scheduling dashboard redirect")
-        self.root.after(200, self._ensure_dashboard_redirect)
+        if not self._is_shutting_down:
+            self.root.after(200, self._ensure_dashboard_redirect)
     
     def _ensure_dashboard_redirect(self):
         """Ensure user is redirected to dashboard/map view after chat termination."""
+        if self._is_shutting_down:
+            return
+            
         if self.current_view != "map":
             # Force redirect to map view
             self._show_user_map()
         
         # Force refresh of user map to show updated statuses
-        self.root.after(100, self._load_users_on_map)
+        if not self._is_shutting_down:
+            self.root.after(100, self._load_users_on_map)
         
         # Update status label if it exists
         if hasattr(self, 'chat_status_label') and self.chat_status_label:
@@ -1491,6 +1512,9 @@ class GUIManager:
         """Handle logout."""
         result = messagebox.askyesno("Logout", "Are you sure you want to logout?")
         if result:
+            # Set shutdown flag to prevent callbacks
+            self._is_shutting_down = True
+            
             # Comprehensive cleanup before logout
             if self.current_user:
                 print("🧹 Performing cleanup before logout...")
@@ -1530,6 +1554,9 @@ class GUIManager:
     def _on_closing(self):
         """Handle application closing."""
         try:
+            # Set shutdown flag to prevent callbacks
+            self._is_shutting_down = True
+            
             # Comprehensive cleanup before exit
             if self.current_user:
                 print("🧹 Performing cleanup before exit...")
