@@ -1089,23 +1089,10 @@ class GUIManager:
         peer_uid = self.active_chat_session.get('uid', '')
         chat_id = self.active_chat_session.get('chat_id', '')
         
-        # Notify peer about chat termination via Firebase
-        if chat_id:
-            print(f"🔄 Terminating chat {chat_id} by user {current_uid}")
-            # Update current user's status to 'terminated' and set chat as terminated
-            participant_update_success = self.firebase_manager.update_chat_participant_status(chat_id, 'terminated')
-            chat_terminate_success = self.firebase_manager.set_chat_terminated(chat_id, current_uid)
-            print(f"📊 Firebase updates - Participant: {participant_update_success}, Chat: {chat_terminate_success}")
-            
-            # If network message failed and this is critical, give Firebase more time
-            delay = 3000 if not network_message_sent else 2000
-            print(f"⏱️ Using {delay}ms delay before stopping listener (network_sent: {network_message_sent})")
-            # Longer delay before stopping listener to ensure peer gets the update
-            # This is critical when network messages fail and Firebase is the backup
-            self.root.after(delay, lambda: self.firebase_manager.stop_listening(f"chats/{chat_id}"))
-        
-        # Send termination message via network if connected
+        # Initialize network message status
         network_message_sent = False
+        
+        # Send termination message via network if connected (try network first)
         try:
             if hasattr(self, 'network_manager') and self.network_manager:
                 termination_content = {
@@ -1121,6 +1108,21 @@ class GUIManager:
                     print(f"❌ Network termination message failed - peer not connected. Firebase backup will handle this.")
         except Exception as e:
             print(f"❌ Failed to send network termination message: {e}. Firebase backup will handle this.")
+        
+        # Notify peer about chat termination via Firebase (backup mechanism)
+        if chat_id:
+            print(f"🔄 Terminating chat {chat_id} by user {current_uid}")
+            # Update current user's status to 'terminated' and set chat as terminated
+            participant_update_success = self.firebase_manager.update_chat_participant_status(chat_id, 'terminated')
+            chat_terminate_success = self.firebase_manager.set_chat_terminated(chat_id, current_uid)
+            print(f"📊 Firebase updates - Participant: {participant_update_success}, Chat: {chat_terminate_success}")
+            
+            # If network message failed and this is critical, give Firebase more time
+            delay = 3000 if not network_message_sent else 2000
+            print(f"⏱️ Using {delay}ms delay before stopping listener (network_sent: {network_message_sent})")
+            # Longer delay before stopping listener to ensure peer gets the update
+            # This is critical when network messages fail and Firebase is the backup
+            self.root.after(delay, lambda: self.firebase_manager.stop_listening(f"chats/{chat_id}"))
         
         # Clear session data
         session_keys = [f"{current_uid}-{peer_uid}", f"{peer_uid}-{current_uid}"]
@@ -1347,14 +1349,19 @@ class GUIManager:
             participants = chat_data.get('participants', {})
             peer_uid = self.active_chat_session.get('uid', '')
             
-            # Check if peer has terminated the chat
+            # Check if peer has terminated the chat (but avoid double-processing)
             peer_status = participants.get(peer_uid, {}).get('status', '')
             print(f"👥 Peer {peer_uid} status: {peer_status}")
             
-            if peer_status == 'terminated':
-                print(f"🚨 Peer {peer_uid} terminated chat, handling termination")
+            # Only trigger peer termination if:
+            # 1. Peer status is terminated AND
+            # 2. We didn't already handle this via the global chat status check above
+            if peer_status == 'terminated' and chat_status != 'terminated':
+                print(f"🚨 Peer {peer_uid} terminated chat (individual status), handling termination")
                 # Peer has ended the chat, terminate our side too
                 self.root.after(0, lambda: self._handle_peer_chat_termination())
+            elif peer_status == 'terminated' and chat_status == 'terminated':
+                print(f"ℹ️ Peer {peer_uid} status is terminated, but already handled via global chat status")
                 
         except Exception as e:
             print(f"Error handling chat updates: {e}")
