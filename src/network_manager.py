@@ -177,8 +177,8 @@ class NetworkManager:
             
             # Encrypt message content
             message_json = json.dumps(message)
-            encrypted_content = self.crypto_manager.encrypt_message(message_json)
-            hmac_tag = self.crypto_manager.calculate_hmac(message_json)
+            encrypted_content = self.crypto_manager.encrypt_message(message_json, peer_id=peer_id)
+            hmac_tag = self.crypto_manager.calculate_hmac(message_json, peer_id=peer_id)
             
             # Create encrypted message wrapper
             encrypted_message = {
@@ -488,10 +488,10 @@ class NetworkManager:
                 received_hmac = bytes.fromhex(message.get('hmac', ''))
                 
                 # Decrypt message
-                decrypted_json = self.crypto_manager.decrypt_message(encrypted_content)
+                decrypted_json = self.crypto_manager.decrypt_message(encrypted_content, peer_id=peer_id)
                 
                 # Verify HMAC
-                if not self.crypto_manager.verify_hmac(decrypted_json, received_hmac):
+                if not self.crypto_manager.verify_hmac(decrypted_json, received_hmac, peer_id=peer_id):
                     print(f"HMAC verification failed for message from {peer_id}")
                     return
                 
