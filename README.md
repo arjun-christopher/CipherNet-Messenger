@@ -19,6 +19,9 @@ CipherNet Messenger is a secure, decentralized peer-to-peer messaging applicatio
 - **Secure File Transfer**: Encrypted file sharing with integrity verification
 - **Modern GUI**: Clean, intuitive interface built with CustomTkinter
 - **Desktop Notifications**: Cross-platform notification system
+- **Bidirectional Chat Requests**: Real-time request/response handling with automatic cleanup
+- **Python 3.13 Compatible**: Updated for latest Python version compatibility
+- **Automated Database Maintenance**: Background cleanup of stale Firebase data
 
 ## Problem Statement
 
@@ -35,7 +38,7 @@ CipherNet addresses these issues by providing **provable confidentiality, integr
 
 ### Prerequisites
 
-- Python 3.9 or higher
+- Python 3.9 or higher (tested up to Python 3.13)
 - Firebase account (for authentication setup)
 
 ### Quick Start
@@ -45,15 +48,24 @@ CipherNet addresses these issues by providing **provable confidentiality, integr
 git clone https://github.com/arjun-christopher/CipherNet-Messenger.git
 cd CipherNet-Messenger
 
-# Run setup script (installs dependencies and creates config)
+# Run automated setup script
 python setup.py
 
-# Configure Firebase settings in config.json
+# Configure Firebase credentials in the generated .env file
 # Then run the application
 python src/main.py
 ```
 
-### Manual Setup
+### Automated Setup Features
+
+The `setup.py` script provides:
+- **Dependency Installation**: Automatically installs all required packages
+- **Configuration Generation**: Creates `config.json` with optimal settings
+- **Environment File Creation**: Generates `.env` template with Firebase placeholders
+- **Compatibility Checking**: Validates Python version and system requirements
+- **Interactive Setup**: Guides you through Firebase configuration
+
+### Manual Setup (Alternative)
 
 #### Install Dependencies
 
@@ -63,11 +75,21 @@ pip install -r requirements.txt
 
 #### Configuration
 
-1. Run the setup script: `python setup.py` (creates config files automatically)
-2. Set up Firebase project with Authentication and Realtime Database
-3. Edit `.env` file with your Firebase credentials (created automatically by setup script)
-4. Optionally edit `config.json` for other application settings
-5. Run the application: `python src/main.py`
+1. **Run Setup**: `python setup.py` (recommended for automated configuration)
+2. **Firebase Setup**: Create Firebase project with Authentication and Realtime Database
+3. **Environment Variables**: Edit `.env` file with your Firebase credentials
+4. **Application Settings**: Optionally customize `config.json`
+5. **Launch Application**: `python src/main.py`
+
+#### Firebase Configuration
+
+Your `.env` file should contain:
+```env
+FIREBASE_API_KEY=your_api_key_here
+FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+FIREBASE_DATABASE_URL=https://your_project-default-rtdb.firebaseio.com/
+FIREBASE_PROJECT_ID=your_project_id
+```
 
 ## Architecture
 
@@ -91,7 +113,7 @@ User A ←→ Firebase (Auth/Signaling) ←→ User B
 
 ## Technology Stack
 
-- **Language**: Python 3.9+
+- **Language**: Python 3.9+ (Compatible through Python 3.13)
 - **GUI Framework**: CustomTkinter (modern Tkinter-based UI)
 - **Cryptography**: pycryptodome (RSA, Blowfish, SHA-256, HMAC)
 - **Backend Service**: Google Firebase (Authentication & Signaling only)
@@ -99,6 +121,7 @@ User A ←→ Firebase (Auth/Signaling) ←→ User B
 - **Concurrency**: threading (responsive UI during network operations)
 - **Notifications**: desktop-notifier (cross-platform notifications)
 - **Image Processing**: Pillow (file validation and sanitization)
+- **Environment Management**: python-dotenv (secure configuration)
 
 ## Security Implementation
 
@@ -136,6 +159,7 @@ User A ←→ Firebase (Auth/Signaling) ←→ User B
 2. Chat requests sent to private path `/requests/{UserID}/`
 3. Upon acceptance, IP address shared via private channel `/chats/{ChatID}/`
 4. Direct P2P connection established using shared IP
+5. **Automated cleanup** removes processed requests to maintain database hygiene
 
 #### Secure File Transfer
 
@@ -163,28 +187,34 @@ User A ←→ Firebase (Auth/Signaling) ←→ User B
 ```
 CipherNet-Messenger/
 ├── docs/                       # Documentation
-├── src/                          # Source code
-│   ├── main.py                  # Application entry point
-│   ├── config.py                # Configuration management
-│   ├── auth_manager.py          # Firebase authentication
-│   ├── crypto_manager.py        # RSA/Blowfish encryption
-│   ├── network_manager.py       # P2P networking
-│   ├── firebase_manager.py      # Firebase signaling
+│   ├── Project Report.docx    # Complete project documentation
+│   └── Project Report.txt     # Text version of documentation
+├── src/                        # Source code
+│   ├── main.py                # Application entry point
+│   ├── config.py              # Configuration management
+│   ├── auth_manager.py        # Firebase authentication
+│   ├── crypto_manager.py      # RSA/Blowfish encryption
+│   ├── network_manager.py     # P2P networking
+│   ├── firebase_manager.py    # Firebase signaling & database operations
 │   ├── file_transfer_manager.py # Secure file sharing
-│   ├── gui_manager.py           # User interface
-│   └── notification_manager.py  # Desktop notifications
-├── tests/                       # Comprehensive test suite
-│   ├── conftest.py             # Test configuration
-│   ├── test_config.py          # Config tests
-│   ├── test_crypto_manager.py  # Crypto tests
-│   ├── test_auth_manager.py    # Auth tests
+│   ├── gui_manager.py         # User interface (CustomTkinter)
+│   ├── notification_manager.py # Desktop notifications
+│   └── cleanup_manager.py     # Automated Firebase cleanup utilities
+├── tests/                     # Comprehensive test suite
+│   ├── conftest.py           # Test configuration
+│   ├── test_config.py        # Config tests
+│   ├── test_crypto_manager.py # Crypto tests
+│   ├── test_auth_manager.py  # Auth tests
 │   ├── test_network_manager.py # Network tests
 │   ├── test_notification_manager.py # Notification tests
-│   └── run_tests.py           # Test runner
-├── .gitignore                 # Git ignore rules
-├── requirements.txt            # Dependencies
-├── setup.py                   # Setup script
-└── README.md                 # This file
+│   └── run_tests.py         # Test runner
+├── .env                      # Environment variables (created by setup)
+├── config.json              # Application configuration
+├── .gitignore               # Git ignore rules
+├── requirements.txt         # Python dependencies
+├── setup.py                # Automated setup script
+├── LICENSE                 # MIT License file
+└── README.md              # This file
 ```
 
 ## Testing

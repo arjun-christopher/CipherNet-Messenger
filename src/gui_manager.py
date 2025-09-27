@@ -18,7 +18,7 @@ from network_manager import NetworkManager
 from firebase_manager import FirebaseManager
 from file_transfer_manager import FileTransferManager
 from notification_manager import NotificationManager
-from cleanup_manager import cleanup_old_requests
+from cleanup_manager import comprehensive_cleanup
 
 
 class GUIManager:
@@ -284,8 +284,7 @@ class GUIManager:
             self.current_user = self.auth_manager.get_current_user()
             self.notification_manager.notify_authentication_success(self.current_user['email'])
             
-            # Clean up old accepted requests in background
-            self._cleanup_old_requests()
+            # Startup cleanup no longer needed - cleanup moved to exit
             
             self.show_main_screen()
         else:
@@ -301,8 +300,15 @@ class GUIManager:
     
     def _handle_logout(self):
         """Handle user logout."""
-        # Cleanup
-        self.firebase_manager.remove_user_presence()
+        # Comprehensive cleanup before logout
+        if self.current_user:
+            print("🧹 Performing cleanup before logout...")
+            comprehensive_cleanup(self.auth_manager, self.firebase_manager, silent=False)
+            # Mark cleanup as done to prevent duplicate in atexit
+            if hasattr(self, '_cleanup_done_flag'):
+                self._cleanup_done_flag[0] = True
+        
+        # Standard cleanup
         self.firebase_manager.cleanup()
         self.network_manager.stop_server()
         
@@ -500,21 +506,7 @@ class GUIManager:
         except Exception as e:
             print(f"Error showing chat accepted dialog: {e}")
 
-    def _cleanup_old_requests(self):
-        """Clean up old accepted requests in background thread."""
-        def cleanup_worker():
-            try:
-                cleaned_count = cleanup_old_requests(
-                    self.auth_manager, 
-                    self.firebase_manager, 
-                    silent=True
-                )
-                if cleaned_count > 0:
-                    print(f"🧹 Cleaned up {cleaned_count} old chat requests")
-            except Exception as e:
-                print(f"Cleanup error: {e}")
-        
-        threading.Thread(target=cleanup_worker, daemon=True).start()
+
 
     def _clear_current_frame(self):
         """Clear the current frame."""
@@ -524,9 +516,15 @@ class GUIManager:
     
     def _on_closing(self):
         """Handle application closing."""
+        # Comprehensive cleanup before exit
         if self.current_user:
-            self.firebase_manager.remove_user_presence()
+            print("🧹 Performing cleanup before exit...")
+            comprehensive_cleanup(self.auth_manager, self.firebase_manager, silent=False)
+            # Mark cleanup as done to prevent duplicate in atexit
+            if hasattr(self, '_cleanup_done_flag'):
+                self._cleanup_done_flag[0] = True
         
+        # Standard cleanup
         self.firebase_manager.cleanup()
         
         if self.network_manager:
