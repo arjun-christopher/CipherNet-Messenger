@@ -1100,13 +1100,14 @@ class GUIManager:
         # Send termination message via network if connected
         try:
             if hasattr(self, 'network_manager') and self.network_manager:
-                termination_message = {
-                    'type': 'chat_terminated',
+                termination_content = {
                     'sender': current_uid,
-                    'content': {'reason': 'user_initiated'}
+                    'reason': 'user_initiated'
                 }
-                # This would be sent via network manager to connected peer
-                # self.network_manager.send_message(peer_uid, termination_message)
+                print(f"📡 Sending network termination message to {peer_uid}")
+                # Send via network manager to connected peer
+                self.network_manager.send_message(peer_uid, 'chat_terminated', termination_content)
+                print(f"✅ Network termination message sent to {peer_uid}")
         except Exception as e:
             print(f"Failed to send termination message: {e}")
         
@@ -1349,9 +1350,13 @@ class GUIManager:
     
     def _handle_chat_termination(self, message, peer_id):
         """Handle incoming chat termination message via network."""
+        print(f"📡 Received network chat termination from {peer_id}: {message}")
         if self.active_chat_session:
+            print(f"🔄 Processing network chat termination")
             # Peer terminated chat via network message
             self.root.after(0, lambda: self._handle_peer_chat_termination())
+        else:
+            print(f"⚠️ No active chat session for network termination from {peer_id}")
     
     def _handle_peer_chat_termination(self):
         """Handle when peer terminates the chat session."""
