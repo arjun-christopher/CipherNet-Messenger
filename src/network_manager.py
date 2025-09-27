@@ -611,9 +611,18 @@ class NetworkManager:
             except Exception as e:
                 print(f"Error in connection closed callback: {e}")
     
+    def get_local_ip(self) -> str:
+        """
+        Get local IP address (public method).
+        
+        Returns:
+            Local IP address string
+        """
+        return self.local_ip
+    
     def _get_local_ip(self) -> str:
         """
-        Get local IP address.
+        Get local IP address (private method for initialization).
         
         Returns:
             Local IP address string
