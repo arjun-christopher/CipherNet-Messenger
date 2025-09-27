@@ -21,8 +21,19 @@ class FileTransferManager:
     def __init__(self, config, crypto_manager, network_manager, notification_manager=None):
         """
         Initialize file transfer manager.
-        
-        Args:
+                      print(f"❌ File integrity check failed! File may be corrupted or tampered with.")
+                print(f"   Saving anyway as partial file for debugging...")
+                try:
+                    # Save with _partial suffix for debugging
+                    safe_filename = self._sanitize_filename(f"PARTIAL_{filename}")
+                    file_path = self.downloads_dir / safe_filename
+                    with open(file_path, 'wb') as f:
+                        f.write(file_data)
+                    print(f"⚠️ Partial file saved for debugging: {file_path}")
+                    print(f"📁 Partial file location: {file_path.absolute()}")
+                except Exception as save_error:
+                    print(f"❌ Failed to save partial file: {save_error}")
+                return False   Args:
             config: Configuration manager instance
             crypto_manager: Cryptography manager instance
             network_manager: Network manager instance
@@ -34,8 +45,8 @@ class FileTransferManager:
         self.notification_manager = notification_manager
         
         self.chunk_size = config.get('network.file_chunk_size', 4096)
-        self.downloads_dir = str(Path(__file__).parent.parent / "downloads")
-        Path(self.downloads_dir).mkdir(parents=True, exist_ok=True)
+        self.downloads_dir = Path(__file__).parent.parent / "downloads"
+        self.downloads_dir.mkdir(parents=True, exist_ok=True)
 
         # File transfer tracking
         self.active_transfers = {}  # {transfer_id: transfer_info}
@@ -382,12 +393,22 @@ class FileTransferManager:
             
             if is_last_chunk:
                 print(f"🏁 Last chunk received! Assembling and saving file...")
+                print(f"🔍 Debug info before assembly:")
+                print(f"   - Transfer ID: {transfer_id}")
+                print(f"   - Filename: {transfer_info.get('filename', 'UNKNOWN')}")
+                print(f"   - Total chunks: {len(transfer_info['chunks'])}")
+                print(f"   - Downloads dir: {self.downloads_dir}")
+                print(f"   - Downloads dir exists: {self.downloads_dir.exists()}")
+                
                 # Assemble and save file with integrity verification
-                self._assemble_and_save_file(transfer_id)
+                result = self._assemble_and_save_file(transfer_id)
+                print(f"🏁 File assembly result: {'SUCCESS' if result else 'FAILED'}")
+                
             elif progress >= 99.0:  # Safety check for near-complete transfers
                 print(f"⚠️ Transfer appears complete ({progress:.1f}%) but last chunk flag not set. Attempting to save...")
                 # Try to save what we have
-                self._assemble_and_save_file(transfer_id)
+                result = self._assemble_and_save_file(transfer_id)
+                print(f"⚠️ Forced assembly result: {'SUCCESS' if result else 'FAILED'}")
                 
         except Exception as e:
             print(f"Error handling file chunk: {e}")
@@ -544,8 +565,14 @@ class FileTransferManager:
         Args:
             transfer_id: Transfer identifier
         """
+        print(f"🔧 _assemble_and_save_file called for transfer_id: {transfer_id}")
         try:
+            if transfer_id not in self.active_transfers:
+                print(f"❌ Transfer ID {transfer_id} not found in active transfers!")
+                return False
+                
             transfer_info = self.active_transfers[transfer_id]
+            print(f"✅ Transfer info found: {list(transfer_info.keys())}")
             filename = transfer_info['filename']
             expected_hash = transfer_info['file_hash']
             chunks = transfer_info['chunks']
@@ -580,8 +607,10 @@ class FileTransferManager:
             print("✅ File integrity verified - SHA-256 hashes match")
             
             # Save file
+            print(f"💾 Preparing to save file...")
             safe_filename = self._sanitize_filename(filename)
             file_path = self.downloads_dir / safe_filename
+            print(f"📁 Initial save path: {file_path}")
             
             # Ensure unique filename
             counter = 1
@@ -591,9 +620,12 @@ class FileTransferManager:
                 suffix = original_path.suffix
                 file_path = original_path.parent / f"{name}_{counter}{suffix}"
                 counter += 1
+                print(f"📁 File exists, trying: {file_path}")
             
+            print(f"💾 Writing file to: {file_path}")
             with open(file_path, 'wb') as f:
                 f.write(file_data)
+            print(f"✅ File write completed")
             
             # Sanitize image files
             if self._is_image_file(file_path):
@@ -606,11 +638,6 @@ class FileTransferManager:
             # Show completion notification
             if self.notification_manager:
                 self.notification_manager.notify_file_complete(filename, True)
-                
-            # Cleanup transfer
-            self._cleanup_transfer(transfer_id)
-            
-            return True
             
             # Notify sender of successful completion
             complete_message = {
@@ -621,6 +648,9 @@ class FileTransferManager:
             self.network_manager.send_message(
                 transfer_info['peer_id'], 'file_complete', complete_message
             )
+            
+            # Cleanup transfer
+            self._cleanup_transfer(transfer_id)
             
             return True
             
