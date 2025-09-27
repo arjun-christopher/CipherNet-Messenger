@@ -576,9 +576,13 @@ class GUIManager:
     def _send_chat_request(self, user):
         """Send a chat request to a user."""
         try:
+            # Get local IP address for the request
+            local_ip = self.network_manager.get_local_ip()
+            
             success = self.firebase_manager.send_chat_request(
                 user['uid'],
-                "Hello! Let's chat securely using CipherNet Messenger."
+                "Hello! Let's chat securely using CipherNet Messenger.",
+                local_ip
             )
             
             if success:
@@ -727,8 +731,28 @@ class GUIManager:
                     
                     if not peer_ip:
                         print(f"❌ No IP address available for {peer_email}")
-                        self._show_session_error("Peer IP address not available")
-                        return
+                        print(f"🔄 Attempting to update chat connection info...")
+                        
+                        # Try to update current user's IP in the chat
+                        local_ip = self.network_manager.get_local_ip()
+                        if local_ip and self.firebase_manager.update_chat_connection_info(chat_id, local_ip):
+                            print(f"✅ Updated chat connection info with local IP: {local_ip}")
+                            
+                            # Retry getting chat info
+                            chat_info = self.firebase_manager.get_chat_connection_info(chat_id)
+                            if chat_info:
+                                participants = chat_info.get('participants', {})
+                                peer_info = participants.get(peer_uid, {})
+                                peer_ip = peer_info.get('ip', '')
+                                
+                                if peer_ip:
+                                    print(f"✅ Peer IP address found after update: {peer_ip}")
+                                else:
+                                    print(f"❌ Peer IP still not available after update")
+                        
+                        if not peer_ip:
+                            self._show_session_error("Peer IP address not available - ensure both users have sent connection info")
+                            return
                     
                     print(f"🌐 Connecting to {peer_email} at {peer_ip}:{peer_port}")
                     
@@ -797,11 +821,6 @@ class GUIManager:
                     self.chat_status_label.configure(
                         text=f"🔐 Secure session active with {peer_email}",
                         text_color=("#51cf66", "#51cf66")
-                    )
-                    
-                    # Add system message about encryption
-                    self._add_system_message(
-                        "🔐 End-to-end encryption enabled with RSA-2048 + Blowfish-256"
                     )
                     
                     # Update security status
@@ -1080,7 +1099,7 @@ class GUIManager:
         
         info_label = ctk.CTkLabel(
             welcome_frame,
-            text="All messages are end-to-end encrypted\\nOnly you and your chat partner can read them",
+            text="All messages are end-to-end encrypted. nOnly you and your chat partner can read them",
             font=ctk.CTkFont(size=12),
             text_color=("#666", "#aaa"),
             justify="center"

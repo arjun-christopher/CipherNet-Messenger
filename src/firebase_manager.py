@@ -155,13 +155,14 @@ class FirebaseManager:
             print(f"Failed to get online users: {e}")
             return []
     
-    def send_chat_request(self, target_uid: str, message: str = "Hello! Let's chat securely.") -> bool:
+    def send_chat_request(self, target_uid: str, message: str = "Hello! Let's chat securely.", local_ip: str = None) -> bool:
         """
         Send a chat request to another user.
         
         Args:
             target_uid: Target user's UID
             message: Optional request message
+            local_ip: Local IP address of sender
         
         Returns:
             True if request sent successfully, False otherwise
@@ -178,6 +179,11 @@ class FirebaseManager:
                 "timestamp": int(time.time() * 1000),
                 "status": "pending"
             }
+            
+            # Include sender's IP if provided
+            if local_ip:
+                request_data["from_ip"] = local_ip
+                request_data["from_port"] = self.config.get('network.default_port', 8888)
             
             # Generate unique request ID
             request_id = f"{current_user['uid']}_{int(time.time() * 1000)}"
@@ -219,7 +225,13 @@ class FirebaseManager:
                 return False
             
             if accept and local_ip:
-                # Create private chat channel with IP address
+                # Get the original request data to extract sender's IP
+                request_data = self._read_data(request_path)
+                requester_ip = request_data.get('from_ip', '') if request_data else ''
+                requester_port = request_data.get('from_port', 8888) if request_data else 8888
+                requester_email = request_data.get('from_email', '') if request_data else ''
+                
+                # Create private chat channel with both users' IP addresses
                 chat_id = f"chat_{min(current_user['uid'], requester_uid)}_{max(current_user['uid'], requester_uid)}"
                 chat_data = {
                     "participants": {
@@ -229,9 +241,9 @@ class FirebaseManager:
                             "port": self.config.get('network.default_port', 8888)
                         },
                         requester_uid: {
-                            "email": "",  # Will be filled by requester
-                            "ip": "",
-                            "port": 0
+                            "email": requester_email,
+                            "ip": requester_ip,
+                            "port": requester_port
                         }
                     },
                     "created_at": int(time.time() * 1000),
