@@ -58,7 +58,7 @@ CipherNet uses Firebase for authentication and peer discovery only. No messages 
 ```
 User A ←→ Firebase (Auth/Discovery) ←→ User B
     ↓                                   ↓
-    └───── Direct P2P Connection ──────┘
+    └───── Direct P2P Connection ───────┘
 ```
 
 ## Technology Stack
@@ -117,7 +117,9 @@ CipherNet-Messenger/
 ├── .env                      # Environment variables
 ├── requirements.txt          # Python dependencies
 ├── setup.py                 # Setup script
-└── README.md               # This file
+├──  README.md               # This file
+├──  LICENSE                # Open-source license details
+└── .gitignore               # Ignored files & folders for Git
 ```
 
 ## Documentation
