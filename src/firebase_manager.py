@@ -263,6 +263,37 @@ class FirebaseManager:
         except Exception as e:
             print(f"Failed to get chat info: {e}")
             return None
+
+    def update_chat_participant_status(self, chat_id: str, status: str) -> bool:
+        """
+        Update current user's status in a chat.
+        
+        Args:
+            chat_id: Chat identifier
+            status: New status ('online', 'offline')
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            current_user = self.auth_manager.get_current_user()
+            if not current_user:
+                return False
+            
+            current_time = int(time.time() * 1000)
+            chat_path = f"chats/{chat_id}"
+            
+            updates = {
+                f'participants/{current_user["uid"]}/status': status,
+                f'participants/{current_user["uid"]}/last_seen': current_time,
+                'last_activity': current_time
+            }
+            
+            return self._update_data(chat_path, updates)
+            
+        except Exception as e:
+            print(f"Failed to update chat participant status: {e}")
+            return False
     
     def check_sent_requests_responses(self) -> List[Dict[str, Any]]:
         """

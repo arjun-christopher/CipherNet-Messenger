@@ -30,7 +30,8 @@ def comprehensive_cleanup(auth_manager, firebase_manager, silent=True):
         stats = {
             "accepted_requests": 0,
             "pending_requests": 0, 
-            "stale_chats": 0,
+            "marked_inactive_chats": 0,
+            "deleted_inactive_chats": 0,
             "own_presence": 0,
             "total_cleaned": 0
         }
@@ -45,12 +46,14 @@ def comprehensive_cleanup(auth_manager, firebase_manager, silent=True):
             print("  🗑️  Cleaning stale pending requests...")
         stats["pending_requests"] = _cleanup_stale_pending_requests(firebase_manager, current_uid, silent)
         
-        # 3. Clean up inactive chat sessions (no activity for 7 days)
+        # 3. Process user's chats on exit (mark inactive and delete)
         if not silent:
-            print("  🗑️  Cleaning inactive chat sessions...")
-        stats["stale_chats"] = _cleanup_inactive_chats(firebase_manager, current_uid, silent)
+            print("  � Processing user's chats...")
+        chat_stats = cleanup_user_chats_on_exit(firebase_manager, current_uid, silent)
+        stats["marked_inactive_chats"] = chat_stats["marked_inactive"]
+        stats["deleted_inactive_chats"] = chat_stats["deleted_chats"]
         
-        # 4. Remove own presence from lobby (user is logging out)
+        # 5. Remove own presence from lobby (user is logging out)
         if not silent:
             print("  🗑️  Removing presence from lobby...")
         stats["own_presence"] = _cleanup_own_presence(firebase_manager, current_uid, silent)
@@ -58,10 +61,11 @@ def comprehensive_cleanup(auth_manager, firebase_manager, silent=True):
         stats["total_cleaned"] = sum(stats.values()) - stats["total_cleaned"]  # Exclude self-reference
         
         if not silent:
-            print(f"🎉 Cleanup complete! Removed {stats['total_cleaned']} items:")
+            print(f"🎉 Cleanup complete! Processed {stats['total_cleaned']} items:")
             print(f"  - Accepted requests: {stats['accepted_requests']}")
             print(f"  - Stale pending requests: {stats['pending_requests']}")
-            print(f"  - Inactive chats: {stats['stale_chats']}")
+            print(f"  - Marked inactive chats: {stats['marked_inactive_chats']}")
+            print(f"  - Deleted inactive chats: {stats['deleted_inactive_chats']}")
             print(f"  - Own presence: {stats['own_presence']}")
         
         return stats
@@ -130,12 +134,11 @@ def _cleanup_stale_pending_requests(firebase_manager, current_uid, silent):
     return cleaned_count
 
 
-def _cleanup_inactive_chats(firebase_manager, current_uid, silent):
-    """Clean up chat sessions with no activity for 7 days."""
-    cleaned_count = 0
+def _mark_user_chats_inactive(firebase_manager, current_uid, silent):
+    """Mark all chats involving current user as inactive when they leave."""
+    marked_count = 0
     try:
         current_time = int(time.time() * 1000)
-        inactive_threshold = 7 * 24 * 60 * 60 * 1000  # 7 days in milliseconds
         
         # Read all chats
         chats_data = firebase_manager._read_data("chats")
@@ -145,18 +148,59 @@ def _cleanup_inactive_chats(firebase_manager, current_uid, silent):
                 if isinstance(chat_data, dict):
                     participants = chat_data.get('participants', {})
                     
-                    # Only clean chats involving current user
+                    # Only mark chats involving current user
                     if current_uid in participants:
-                        created_at = chat_data.get('created_at', 0)
-                        last_activity = chat_data.get('last_activity', created_at)
+                        status = chat_data.get('status', 'active')
                         
-                        # Delete if inactive for more than 7 days
-                        if current_time - last_activity > inactive_threshold:
+                        # Mark as inactive if currently active
+                        if status == 'active':
+                            # Update chat status and set current user as offline
                             chat_path = f"chats/{chat_id}"
-                            if firebase_manager._delete_data(chat_path):
-                                cleaned_count += 1
+                            update_data = {
+                                'status': 'inactive',
+                                'last_activity': current_time,
+                                f'participants/{current_uid}/status': 'offline',
+                                f'participants/{current_uid}/last_seen': current_time
+                            }
+                            
+                            if firebase_manager._update_data(chat_path, update_data):
+                                marked_count += 1
                                 if not silent:
-                                    print(f"    ✅ Deleted inactive chat: {chat_id}")
+                                    print(f"    🔄 Marked chat as inactive: {chat_id}")
+    
+    except Exception as e:
+        if not silent:
+            print(f"    ❌ Error marking chats inactive: {e}")
+    
+    return marked_count
+
+
+def _cleanup_inactive_chats(firebase_manager, current_uid, silent):
+    """Clean up chat sessions that are marked as inactive."""
+    cleaned_count = 0
+    try:
+        current_time = int(time.time() * 1000)
+        grace_period = 5 * 60 * 1000  # 5 minutes grace period to ensure marking completed
+        
+        # Read all chats
+        chats_data = firebase_manager._read_data("chats")
+        
+        if chats_data:
+            for chat_id, chat_data in chats_data.items():
+                if isinstance(chat_data, dict):
+                    participants = chat_data.get('participants', {})
+                    status = chat_data.get('status', 'active')
+                    last_activity = chat_data.get('last_activity', 0)
+                    
+                    # Delete chats that are inactive and have had time to be properly marked
+                    if (status == 'inactive' and 
+                        current_time - last_activity > grace_period):
+                        
+                        chat_path = f"chats/{chat_id}"
+                        if firebase_manager._delete_data(chat_path):
+                            cleaned_count += 1
+                            if not silent:
+                                print(f"    ✅ Deleted inactive chat: {chat_id}")
     
     except Exception as e:
         if not silent:
@@ -178,6 +222,52 @@ def _cleanup_own_presence(firebase_manager, current_uid, silent):
             print(f"    ❌ Error removing presence: {e}")
     
     return 0
+
+
+def cleanup_user_chats_on_exit(firebase_manager, current_uid, silent=True):
+    """
+    Clean up user's chats when they exit the application.
+    Marks active chats as inactive and deletes them immediately.
+    
+    Args:
+        firebase_manager: FirebaseManager instance
+        current_uid: Current user's UID
+        silent: If True, suppress output messages
+        
+    Returns:
+        dict: Cleanup statistics
+    """
+    try:
+        if not silent:
+            print("🧹 Processing user's chats on exit...")
+        
+        stats = {
+            "marked_inactive": 0,
+            "deleted_chats": 0,
+            "total_processed": 0
+        }
+        
+        # Step 1: Mark user's active chats as inactive
+        if not silent:
+            print("  🔄 Marking active chats as inactive...")
+        stats["marked_inactive"] = _mark_user_chats_inactive(firebase_manager, current_uid, silent)
+        
+        # Step 2: Delete the inactive chats immediately  
+        if not silent:
+            print("  🗑️ Deleting inactive chats...")
+        stats["deleted_chats"] = _cleanup_inactive_chats(firebase_manager, current_uid, silent)
+        
+        stats["total_processed"] = stats["marked_inactive"] + stats["deleted_chats"]
+        
+        if not silent:
+            print(f"✅ Chat cleanup complete: {stats['marked_inactive']} marked inactive, {stats['deleted_chats']} deleted")
+        
+        return stats
+        
+    except Exception as e:
+        if not silent:
+            print(f"❌ Chat cleanup failed: {e}")
+        return {"marked_inactive": 0, "deleted_chats": 0, "total_processed": 0}
 
 
 def cleanup_old_requests(auth_manager, firebase_manager, silent=True):

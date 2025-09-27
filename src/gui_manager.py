@@ -18,7 +18,7 @@ from network_manager import NetworkManager
 from firebase_manager import FirebaseManager
 from file_transfer_manager import FileTransferManager
 from notification_manager import NotificationManager
-from cleanup_manager import comprehensive_cleanup
+from cleanup_manager import comprehensive_cleanup, cleanup_user_chats_on_exit
 
 
 class GUIManager:
@@ -167,8 +167,8 @@ class GUIManager:
         # Refresh online users
         self._refresh_online_users()
         
-        # Setup periodic refresh
-        self.root.after(30000, self._periodic_refresh)  # Refresh every 30 seconds
+        # Setup continuous automatic refresh
+        self.root.after(2000, self._periodic_refresh)  # Refresh every 2 seconds
     
     def _create_main_layout(self):
         """Create the main application layout."""
@@ -193,15 +193,6 @@ class GUIManager:
             width=80
         )
         logout_button.pack(side="right", padx=20, pady=15)
-        
-        # Refresh button
-        refresh_button = ctk.CTkButton(
-            header_frame,
-            text="Refresh",
-            command=self._refresh_online_users,
-            width=80
-        )
-        refresh_button.pack(side="right", padx=(0, 10), pady=15)
         
         # Main content area
         content_frame = ctk.CTkFrame(self.current_frame)
@@ -427,12 +418,12 @@ class GUIManager:
                     )
     
     def _periodic_refresh(self):
-        """Periodic refresh of online users."""
+        """Continuous automatic refresh of online users and chat responses."""
         if self.current_user:
             self._refresh_online_users()
             self._check_chat_responses()
-            # Schedule next refresh
-            self.root.after(30000, self._periodic_refresh)
+            # Schedule next refresh for continuous updates
+            self.root.after(2000, self._periodic_refresh)
 
     def _check_chat_responses(self):
         """Check for accepted chat requests and establish connections."""
