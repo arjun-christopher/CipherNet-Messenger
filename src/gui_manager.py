@@ -74,6 +74,10 @@ class GUIManager:
         
         # Cleanup management
         self._cleanup_done_flag = [False]  # Use list for mutable reference
+        
+        # Periodic task management
+        self._discovery_task_id = None
+        self._response_monitoring_task_id = None
     
     def start_application(self):
         """Start the GUI application."""
@@ -354,13 +358,32 @@ class GUIManager:
         if not self.user_map_canvas:
             return
         
+        # Check if canvas still exists and is valid
+        try:
+            if not self.user_map_canvas.winfo_exists():
+                return
+        except tk.TclError:
+            # Canvas has been destroyed
+            self.user_map_canvas = None
+            return
+        
         # Clear canvas
-        self.user_map_canvas.delete("all")
+        try:
+            self.user_map_canvas.delete("all")
+        except tk.TclError:
+            # Canvas has been destroyed during operation
+            self.user_map_canvas = None
+            return
         
         # Get canvas dimensions
-        self.user_map_canvas.update()
-        canvas_width = self.user_map_canvas.winfo_width()
-        canvas_height = self.user_map_canvas.winfo_height()
+        try:
+            self.user_map_canvas.update()
+            canvas_width = self.user_map_canvas.winfo_width()
+            canvas_height = self.user_map_canvas.winfo_height()
+        except tk.TclError:
+            # Canvas has been destroyed during operation
+            self.user_map_canvas = None
+            return
         
         if canvas_width <= 1 or canvas_height <= 1:
             self.root.after(100, self._load_users_on_map)
@@ -486,12 +509,25 @@ class GUIManager:
     
     def _on_user_hover(self, item_ids, entering):
         """Handle user hover effect."""
-        if entering:
-            for item_id in item_ids:
-                self.user_map_canvas.itemconfig(item_id, width=4)
-        else:
-            for item_id in item_ids:
-                self.user_map_canvas.itemconfig(item_id, width=3)
+        if not self.user_map_canvas:
+            return
+        
+        try:
+            if not self.user_map_canvas.winfo_exists():
+                return
+        except tk.TclError:
+            return
+        
+        try:
+            if entering:
+                for item_id in item_ids:
+                    self.user_map_canvas.itemconfig(item_id, width=4)
+            else:
+                for item_id in item_ids:
+                    self.user_map_canvas.itemconfig(item_id, width=3)
+        except tk.TclError:
+            # Canvas or items have been destroyed
+            pass
     
     def _user_has_active_session(self, uid):
         """Check if user has an active session."""
@@ -1093,12 +1129,23 @@ class GUIManager:
     
     def _start_user_discovery(self):
         """Start periodic user discovery."""
+        # Only run if we're on the map view and logged in
+        if not self.current_user or self.current_view != "map":
+            # Still schedule next check in case user returns to map
+            if self.current_user:  # Only continue if user is still logged in
+                self.root.after(5000, self._start_user_discovery)
+            return
+        
         self._load_users_on_map()
         # Refresh every 5 seconds
         self.root.after(5000, self._start_user_discovery)
     
     def _start_response_monitoring(self):
         """Start monitoring for chat request responses."""
+        # Only run if user is logged in
+        if not self.current_user:
+            return
+        
         self._check_request_responses()
         # Check every 2 seconds for responses
         self.root.after(2000, self._start_response_monitoring)
