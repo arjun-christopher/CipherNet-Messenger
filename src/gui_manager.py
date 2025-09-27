@@ -236,7 +236,7 @@ class GUIManager:
         # App title
         title_label = ctk.CTkLabel(
             header_frame,
-            text="CipherNet Map",
+            text="CipherNet Messenger",
             font=ctk.CTkFont(size=20, weight="bold"),
             text_color="white"
         )
@@ -803,13 +803,6 @@ class GUIManager:
                     self._add_system_message(
                         "🔐 End-to-end encryption enabled with RSA-2048 + Blowfish-256"
                     )
-                    
-                    # Update security status
-                    if hasattr(self, 'security_status_label') and self.security_status_label:
-                        self.security_status_label.configure(
-                            text="🔐 RSA-2048 + Blowfish-256 encryption active",
-                            text_color=("#51cf66", "#51cf66")
-                        )
                     
                     # Enable message input controls
                     if hasattr(self, 'message_entry') and self.message_entry:
