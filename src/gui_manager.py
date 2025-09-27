@@ -1690,7 +1690,6 @@ class GUIManager:
                     
                     # Add encryption status (only first time)
                     if not hasattr(self, '_encryption_status_shown'):
-                        self._add_system_message(f"🔐 Message encrypted with {encryption_info}")
                         self._encryption_status_shown = True
                     
                     print(f"✅ Received encrypted message from {peer_id}: {text_content[:50]}...")
