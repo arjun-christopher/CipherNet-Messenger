@@ -65,7 +65,7 @@ pip install -r requirements.txt
 
 1. Run the setup script: `python setup.py` (creates config files automatically)
 2. Set up Firebase project with Authentication and Realtime Database
-3. Edit `.env` file with your Firebase credentials (copied from .env.example)
+3. Edit `.env` file with your Firebase credentials (created automatically by setup script)
 4. Optionally edit `config.json` for other application settings
 5. Run the application: `python src/main.py`
 

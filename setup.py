@@ -97,28 +97,46 @@ def create_config_file():
 
 
 def create_env_file():
-    """Create .env file from template if it doesn't exist."""
+    """Create .env file with Firebase configuration template."""
     env_file = Path(__file__).parent / ".env"
-    env_example_file = Path(__file__).parent / ".env.example"
     
     if env_file.exists():
         print("⚠️  .env already exists, skipping creation")
         return True
     
-    if not env_example_file.exists():
-        print("❌ .env.example not found!")
-        return False
+    # Define the .env file content
+    env_content = """# Firebase Configuration
+# Fill in your Firebase project credentials below
+
+FIREBASE_API_KEY=your-firebase-api-key
+FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+FIREBASE_DATABASE_URL=https://your-project-default-rtdb.firebaseio.com
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+FIREBASE_MESSAGING_SENDER_ID=your-sender-id
+FIREBASE_APP_ID=your-app-id
+
+# Firebase Setup Instructions:
+# 1. Go to https://console.firebase.google.com/
+# 2. Create a new project or select existing project
+# 3. Go to Project Settings > General tab
+# 4. Scroll down to "Your apps" section
+# 5. Click "Add app" > Web app
+# 6. Copy the configuration values above
+# 7. Enable Authentication > Sign-in method > Email/Password
+# 8. Create Realtime Database > Start in test mode
+"""
     
     try:
-        shutil.copy(env_example_file, env_file)
-        print("✅ .env created from template")
+        with open(env_file, 'w', encoding='utf-8') as f:
+            f.write(env_content)
+        print("✅ .env created with Firebase template")
         print("⚠️  Please edit .env with your Firebase configuration")
         return True
         
     except Exception as e:
         print(f"❌ Failed to create .env: {e}")
         return False
-
 
 def check_optional_dependencies():
     """Check for optional system dependencies."""
