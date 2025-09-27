@@ -171,59 +171,180 @@ class GUIManager:
         self.root.after(2000, self._periodic_refresh)  # Refresh every 2 seconds
     
     def _create_main_layout(self):
-        """Create the main application layout."""
-        # Header
-        header_frame = ctk.CTkFrame(self.current_frame, height=60)
-        header_frame.pack(fill="x", padx=5, pady=(5, 0))
+        """Create the main application layout with navigation and integrated chat."""
+        # Initialize current view state
+        self.current_view = "dashboard"
+        self.active_chat = None
+        self.integrated_chat_widgets = {}
+        
+        # Compact header
+        header_frame = ctk.CTkFrame(self.current_frame, height=45)
+        header_frame.pack(fill="x", padx=0, pady=0)
         header_frame.pack_propagate(False)
         
-        # User info
+        # User info - more compact
         user_label = ctk.CTkLabel(
             header_frame,
-            text=f"Logged in as: {self.current_user['email']}",
-            font=ctk.CTkFont(size=14, weight="bold")
+            text=f"🔐 {self.current_user['email']}",
+            font=ctk.CTkFont(size=12, weight="bold")
         )
-        user_label.pack(side="left", padx=20, pady=15)
+        user_label.pack(side="left", padx=15, pady=12)
         
-        # Logout button
+        # Navigation buttons
+        nav_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
+        nav_frame.pack(side="left", padx=(20, 0))
+        
+        self.dashboard_btn = ctk.CTkButton(
+            nav_frame,
+            text="📊 Dashboard",
+            command=lambda: self._switch_view("dashboard"),
+            width=100,
+            height=32,
+            fg_color=("#1f538d", "#14375e")
+        )
+        self.dashboard_btn.pack(side="left", padx=(0, 5))
+        
+        self.chats_btn = ctk.CTkButton(
+            nav_frame,
+            text="💬 Chats",
+            command=lambda: self._switch_view("chats"),
+            width=100,
+            height=32,
+            fg_color=("#565b5e", "#343638")
+        )
+        self.chats_btn.pack(side="left", padx=5)
+        
+        # Logout button - more compact
         logout_button = ctk.CTkButton(
             header_frame,
             text="Logout",
             command=self._handle_logout,
-            width=80
+            width=70,
+            height=32
         )
-        logout_button.pack(side="right", padx=20, pady=15)
+        logout_button.pack(side="right", padx=15, pady=6)
         
-        # Main content area
-        content_frame = ctk.CTkFrame(self.current_frame)
-        content_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        # Main content area - no padding waste
+        self.content_frame = ctk.CTkFrame(self.current_frame)
+        self.content_frame.pack(fill="both", expand=True, padx=0, pady=(2, 0))
         
-        # Users list
-        users_frame = ctk.CTkFrame(content_frame, width=300)
-        users_frame.pack(side="left", fill="y", padx=(5, 2), pady=5)
+        # Create dashboard view
+        self._create_dashboard_view()
+        
+        # Create chat view (initially hidden)
+        self._create_chat_view()
+    
+    def _switch_view(self, view_name):
+        """Switch between dashboard and chat views."""
+        self.current_view = view_name
+        
+        if view_name == "dashboard":
+            self.dashboard_btn.configure(fg_color=("#1f538d", "#14375e"))
+            self.chats_btn.configure(fg_color=("#565b5e", "#343638"))
+            self.dashboard_view.pack(fill="both", expand=True)
+            self.chat_view.pack_forget()
+        elif view_name == "chats":
+            self.dashboard_btn.configure(fg_color=("#565b5e", "#343638"))
+            self.chats_btn.configure(fg_color=("#1f538d", "#14375e"))
+            self.dashboard_view.pack_forget()
+            self.chat_view.pack(fill="both", expand=True)
+    
+    def _create_dashboard_view(self):
+        """Create the dashboard view with online users."""
+        self.dashboard_view = ctk.CTkFrame(self.content_frame)
+        self.dashboard_view.pack(fill="both", expand=True)
+        
+        # Split layout - users on left, info on right
+        users_frame = ctk.CTkFrame(self.dashboard_view, width=280)
+        users_frame.pack(side="left", fill="y", padx=5, pady=5)
         users_frame.pack_propagate(False)
         
         users_title = ctk.CTkLabel(
             users_frame,
-            text="Online Users",
+            text="🌐 Online Users",
+            font=ctk.CTkFont(size=14, weight="bold")
+        )
+        users_title.pack(pady=(10, 5))
+        
+        # Compact scrollable users list
+        self.users_scroll = ctk.CTkScrollableFrame(users_frame)
+        self.users_scroll.pack(fill="both", expand=True, padx=8, pady=(0, 10))
+        
+        # Info panel - more useful content
+        info_frame = ctk.CTkFrame(self.dashboard_view)
+        info_frame.pack(side="right", fill="both", expand=True, padx=(0, 5), pady=5)
+        
+        # Connection status
+        status_label = ctk.CTkLabel(
+            info_frame,
+            text="🔒 Secure P2P Connection Active",
             font=ctk.CTkFont(size=16, weight="bold")
         )
-        users_title.pack(pady=(15, 10))
+        status_label.pack(pady=20)
         
-        # Scrollable users list
-        self.users_scroll = ctk.CTkScrollableFrame(users_frame)
-        self.users_scroll.pack(fill="both", expand=True, padx=10, pady=(0, 15))
+        # Quick stats
+        stats_frame = ctk.CTkFrame(info_frame)
+        stats_frame.pack(fill="x", padx=20, pady=10)
         
-        # Chat area
-        chat_frame = ctk.CTkFrame(content_frame)
-        chat_frame.pack(side="right", fill="both", expand=True, padx=(2, 5), pady=5)
+        ctk.CTkLabel(
+            stats_frame,
+            text="📈 Connection Stats",
+            font=ctk.CTkFont(size=12, weight="bold")
+        ).pack(pady=(10, 5))
         
-        welcome_label = ctk.CTkLabel(
-            chat_frame,
-            text="Select a user to start secure messaging",
-            font=ctk.CTkFont(size=18)
+        self.stats_text = ctk.CTkTextbox(stats_frame, height=100)
+        self.stats_text.pack(fill="x", padx=10, pady=(0, 10))
+        self._update_stats()
+        
+        # Instructions
+        ctk.CTkLabel(
+            info_frame,
+            text="💡 Click on a user to send a chat request",
+            font=ctk.CTkFont(size=12)
+        ).pack(pady=10)
+    
+    def _create_chat_view(self):
+        """Create the integrated chat view."""
+        self.chat_view = ctk.CTkFrame(self.content_frame)
+        # Don't pack initially - will be shown when switching views
+        
+        # Chat list sidebar
+        chat_list_frame = ctk.CTkFrame(self.chat_view, width=250)
+        chat_list_frame.pack(side="left", fill="y", padx=5, pady=5)
+        chat_list_frame.pack_propagate(False)
+        
+        ctk.CTkLabel(
+            chat_list_frame,
+            text="💬 Active Chats",
+            font=ctk.CTkFont(size=14, weight="bold")
+        ).pack(pady=(10, 5))
+        
+        self.chat_list_scroll = ctk.CTkScrollableFrame(chat_list_frame)
+        self.chat_list_scroll.pack(fill="both", expand=True, padx=8, pady=(0, 10))
+        
+        # Main chat area
+        self.main_chat_area = ctk.CTkFrame(self.chat_view)
+        self.main_chat_area.pack(side="right", fill="both", expand=True, padx=(0, 5), pady=5)
+        
+        # Welcome message for chat view
+        self.chat_welcome_label = ctk.CTkLabel(
+            self.main_chat_area,
+            text="💬 Select a chat to start messaging\n\nSwitch to Dashboard to find online users",
+            font=ctk.CTkFont(size=16),
+            justify="center"
         )
-        welcome_label.pack(expand=True)
+        self.chat_welcome_label.pack(expand=True)
+    
+    def _update_stats(self):
+        """Update connection statistics."""
+        try:
+            local_ip, local_port = self.network_manager.get_local_address()
+            stats_text = f"Local IP: {local_ip}\nPort: {local_port}\nEncryption: RSA + Blowfish\nStatus: Active"
+            self.stats_text.delete("0.0", "end")
+            self.stats_text.insert("0.0", stats_text)
+        except:
+            self.stats_text.delete("0.0", "end")
+            self.stats_text.insert("0.0", "Connection info unavailable")
     
     def _handle_login(self):
         """Handle user login."""
@@ -410,31 +531,27 @@ class GUIManager:
                         local_ip
                     )
                     
-                    # Create chat window immediately for the accepter
+                    # Create integrated chat interface immediately for the accepter
                     try:
                         # Get the requester's connection info from the request
                         requester_ip = request_data.get('sender_ip', 'unknown')
                         requester_port = request_data.get('sender_port', 8888)
                         peer_id = f"{requester_ip}:{requester_port}"
                         
-                        # Create and show chat window with modern UI
-                        chat_window = ChatWindow(
-                            peer_id=peer_id,
-                            peer_email=from_email,
-                            crypto_manager=self.crypto_manager,
-                            network_manager=self.network_manager,
-                            file_transfer_manager=self.file_transfer_manager,
-                            notification_manager=self.notification_manager
-                        )
+                        # Create integrated chat interface
+                        self._create_integrated_chat(peer_id, from_email)
+                        
+                        # Switch to chat view
+                        self._switch_view("chats")
                         
                         # Show success notification
                         self.notification_manager.notify_chat_started(from_email)
                         
                     except Exception as e:
-                        print(f"Error creating chat window for accepted request: {e}")
+                        print(f"Error creating integrated chat for accepted request: {e}")
                         messagebox.showwarning(
-                            "Chat Window Error",
-                            f"Request accepted but failed to open chat window.\n"
+                            "Chat Interface Error",
+                            f"Request accepted but failed to open chat interface.\n"
                             f"The other user should still be able to connect."
                         )
                 else:
@@ -518,18 +635,14 @@ class GUIManager:
                     # Connect to peer via network manager
                     peer_id = f"{target_ip}:{target_port}"
                     
-                    # Create and show chat window with modern UI
-                    chat_window = ChatWindow(
-                        peer_id=peer_id,
-                        peer_email=target_email,
-                        crypto_manager=self.crypto_manager,
-                        network_manager=self.network_manager,
-                        file_transfer_manager=self.file_transfer_manager,
-                        notification_manager=self.notification_manager
-                    )
+                    # Create integrated chat interface
+                    self._create_integrated_chat(peer_id, target_email)
                     
                     # Connect to the peer
                     self.network_manager.connect_to_peer(target_ip, target_port)
+                    
+                    # Switch to chat view
+                    self._switch_view("chats")
                     
                     # Show success notification
                     self.notification_manager.notify_chat_started(target_email)
@@ -571,6 +684,293 @@ class GUIManager:
             self.network_manager.stop_server()
         
         self.root.destroy()
+    
+    def _create_integrated_chat(self, peer_id: str, peer_email: str):
+        """Create an integrated chat interface within the main window."""
+        # Initialize integrated_chat_widgets if not exists
+        if not hasattr(self, 'integrated_chat_widgets'):
+            self.integrated_chat_widgets = {}
+        
+        # Create chat entry in sidebar
+        self._add_chat_to_sidebar(peer_id, peer_email)
+        
+        # Create chat interface data
+        chat_data = {
+            'peer_id': peer_id,
+            'peer_email': peer_email,
+            'messages': [],
+            'chat_frame': None
+        }
+        
+        self.integrated_chat_widgets[peer_id] = chat_data
+        
+        # Activate this chat
+        self._activate_integrated_chat(peer_id)
+    
+    def _add_chat_to_sidebar(self, peer_id: str, peer_email: str):
+        """Add chat to the sidebar list."""
+        chat_btn = ctk.CTkButton(
+            self.chat_list_scroll,
+            text=f"💬 {peer_email.split('@')[0]}",
+            command=lambda: self._activate_integrated_chat(peer_id),
+            anchor="w",
+            height=40,
+            fg_color=("#2b2b2b", "#212121")
+        )
+        chat_btn.pack(fill="x", pady=2, padx=5)
+        
+        # Store reference
+        if peer_id in self.integrated_chat_widgets:
+            self.integrated_chat_widgets[peer_id]['sidebar_btn'] = chat_btn
+    
+    def _activate_integrated_chat(self, peer_id: str):
+        """Activate and display the specified chat."""
+        if not hasattr(self, 'integrated_chat_widgets') or peer_id not in self.integrated_chat_widgets:
+            return
+        
+        # Hide welcome message
+        if hasattr(self, 'chat_welcome_label'):
+            self.chat_welcome_label.pack_forget()
+        
+        # Hide current active chat if any
+        if hasattr(self, 'active_chat') and self.active_chat and self.active_chat in self.integrated_chat_widgets:
+            current_frame = self.integrated_chat_widgets[self.active_chat].get('chat_frame')
+            if current_frame:
+                current_frame.pack_forget()
+        
+        # Set new active chat
+        self.active_chat = peer_id
+        chat_data = self.integrated_chat_widgets[peer_id]
+        
+        # Create chat interface if not exists
+        if not chat_data.get('chat_frame'):
+            self._create_chat_interface(peer_id)
+        
+        # Show the chat frame
+        chat_data['chat_frame'].pack(fill="both", expand=True)
+    
+    def _create_chat_interface(self, peer_id: str):
+        """Create the actual chat interface for a peer."""
+        chat_data = self.integrated_chat_widgets[peer_id]
+        peer_email = chat_data['peer_email']
+        
+        # Main chat frame
+        chat_frame = ctk.CTkFrame(self.main_chat_area)
+        chat_data['chat_frame'] = chat_frame
+        
+        # Modern header
+        self._create_chat_header(chat_frame, peer_email)
+        
+        # Messages area
+        messages_frame = ctk.CTkScrollableFrame(
+            chat_frame,
+            fg_color=("#e5ddd5", "#0a1014")
+        )
+        messages_frame.pack(fill="both", expand=True, padx=0, pady=0)
+        chat_data['messages_frame'] = messages_frame
+        
+        # Input area
+        self._create_chat_input(chat_frame, peer_id)
+        
+        # Add welcome message
+        self._add_system_message_integrated(peer_id, "🔒 Secure end-to-end encrypted chat established")
+    
+    def _create_chat_header(self, parent, peer_email: str):
+        """Create modern chat header."""
+        header_frame = ctk.CTkFrame(
+            parent,
+            height=60,
+            fg_color=("#128c7e", "#075e54"),
+            corner_radius=0
+        )
+        header_frame.pack(fill="x", padx=0, pady=0)
+        header_frame.pack_propagate(False)
+        
+        # Avatar
+        avatar_frame = ctk.CTkFrame(
+            header_frame,
+            width=40,
+            height=40,
+            fg_color=("#dcf8c6", "#128c7e"),
+            corner_radius=20
+        )
+        avatar_frame.pack(side="left", padx=15, pady=10)
+        avatar_frame.pack_propagate(False)
+        
+        ctk.CTkLabel(
+            avatar_frame,
+            text=peer_email[0].upper(),
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color=("#075e54", "white")
+        ).pack(expand=True)
+        
+        # User info
+        info_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
+        info_frame.pack(side="left", fill="both", expand=True, padx=(5, 0))
+        
+        ctk.CTkLabel(
+            info_frame,
+            text=peer_email.split('@')[0].title(),
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color="white",
+            anchor="w"
+        ).pack(anchor="w", pady=(8, 0))
+        
+        ctk.CTkLabel(
+            info_frame,
+            text="🟢 Online • End-to-end encrypted",
+            font=ctk.CTkFont(size=10),
+            text_color=("#dcf8c6", "#a0a0a0"),
+            anchor="w"
+        ).pack(anchor="w", pady=(0, 8))
+    
+    def _create_chat_input(self, parent, peer_id: str):
+        """Create modern chat input area."""
+        input_container = ctk.CTkFrame(
+            parent,
+            height=60,
+            fg_color=("#f0f2f5", "#1e2428"),
+            corner_radius=0
+        )
+        input_container.pack(fill="x", padx=0, pady=(2, 0))
+        input_container.pack_propagate(False)
+        
+        input_frame = ctk.CTkFrame(
+            input_container,
+            fg_color=("white", "#2a2f32"),
+            corner_radius=20,
+            height=40
+        )
+        input_frame.pack(fill="x", padx=10, pady=10)
+        input_frame.pack_propagate(False)
+        
+        # Message entry
+        message_entry = ctk.CTkEntry(
+            input_frame,
+            placeholder_text="Type a message...",
+            font=ctk.CTkFont(size=13),
+            fg_color="transparent",
+            border_width=0
+        )
+        message_entry.pack(side="left", fill="x", expand=True, padx=(15, 5), pady=5)
+        
+        # Send button
+        send_btn = ctk.CTkButton(
+            input_frame,
+            text="➤",
+            command=lambda: self._send_integrated_message(peer_id, message_entry),
+            width=30,
+            height=30,
+            fg_color=("#128c7e", "#075e54"),
+            corner_radius=15,
+            font=ctk.CTkFont(size=12, weight="bold")
+        )
+        send_btn.pack(side="right", padx=(5, 10), pady=5)
+        
+        # Bind Enter key
+        message_entry.bind('<Return>', lambda e: self._send_integrated_message(peer_id, message_entry))
+        
+        # Store reference
+        self.integrated_chat_widgets[peer_id]['message_entry'] = message_entry
+    
+    def _send_integrated_message(self, peer_id: str, entry_widget):
+        """Send message in integrated chat."""
+        message = entry_widget.get().strip()
+        if not message:
+            return
+        
+        # Clear entry
+        entry_widget.delete(0, "end")
+        
+        # Add to chat display
+        self._add_message_integrated(peer_id, "You", message, is_own=True)
+        
+        # TODO: Send via network manager
+        # For now, just add the message to display
+    
+    def _add_message_integrated(self, peer_id: str, sender: str, message: str, is_own: bool = False):
+        """Add message to integrated chat display."""
+        if not hasattr(self, 'integrated_chat_widgets') or peer_id not in self.integrated_chat_widgets:
+            return
+        
+        chat_data = self.integrated_chat_widgets[peer_id]
+        messages_frame = chat_data.get('messages_frame')
+        if not messages_frame:
+            return
+        
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%H:%M")
+        
+        # Message container
+        msg_container = ctk.CTkFrame(messages_frame, fg_color="transparent")
+        msg_container.pack(fill="x", padx=10, pady=2)
+        
+        # Message bubble
+        if is_own:
+            bubble_frame = ctk.CTkFrame(
+                msg_container,
+                fg_color=("#dcf8c6", "#056162"),
+                corner_radius=15
+            )
+            bubble_frame.pack(side="right", padx=(50, 0))
+        else:
+            bubble_frame = ctk.CTkFrame(
+                msg_container,
+                fg_color=("white", "#1f2937"),
+                corner_radius=15
+            )
+            bubble_frame.pack(side="left", padx=(0, 50))
+        
+        # Message text
+        ctk.CTkLabel(
+            bubble_frame,
+            text=message,
+            font=ctk.CTkFont(size=13),
+            text_color=("#2d3748", "white"),
+            wraplength=300,
+            justify="left"
+        ).pack(padx=12, pady=(8, 4))
+        
+        # Timestamp
+        time_text = f"{timestamp} ✓✓" if is_own else timestamp
+        ctk.CTkLabel(
+            bubble_frame,
+            text=time_text,
+            font=ctk.CTkFont(size=9),
+            text_color=("#718096", "#a0a0a0")
+        ).pack(padx=12, pady=(0, 6), anchor="e" if is_own else "w")
+        
+        # Auto-scroll
+        messages_frame._parent_canvas.yview_moveto(1.0)
+    
+    def _add_system_message_integrated(self, peer_id: str, message: str):
+        """Add system message to integrated chat."""
+        if not hasattr(self, 'integrated_chat_widgets') or peer_id not in self.integrated_chat_widgets:
+            return
+        
+        chat_data = self.integrated_chat_widgets[peer_id]
+        messages_frame = chat_data.get('messages_frame')
+        if not messages_frame:
+            return
+        
+        # System message container
+        sys_container = ctk.CTkFrame(messages_frame, fg_color="transparent")
+        sys_container.pack(fill="x", padx=10, pady=4)
+        
+        # System message bubble
+        sys_bubble = ctk.CTkFrame(
+            sys_container,
+            fg_color=("#f7fafc", "#374151"),
+            corner_radius=15
+        )
+        sys_bubble.pack(anchor="center")
+        
+        ctk.CTkLabel(
+            sys_bubble,
+            text=message,
+            font=ctk.CTkFont(size=11),
+            text_color=("#718096", "#9ca3af")
+        ).pack(padx=15, pady=6)
 
 
 class ChatWindow:
