@@ -194,6 +194,7 @@ class GUIManager:
         # Setup message handlers
         self.network_manager.register_message_handler('text_message', self._handle_text_message)
         self.network_manager.register_message_handler('session_key', self._handle_session_key)
+        self.network_manager.register_message_handler('chat_terminated', self._handle_chat_termination)
         
         # Start user discovery
         self._start_user_discovery()
@@ -565,6 +566,16 @@ class GUIManager:
         peer_uid = peer_user.get('uid', '')
         session_key = f"{current_uid}-{peer_uid}"
         self.active_sessions[session_key] = True
+        
+        # Create chat ID for Firebase monitoring
+        chat_id = f"chat_{min(current_uid, peer_uid)}_{max(current_uid, peer_uid)}"
+        self.active_chat_session['chat_id'] = chat_id
+        
+        # Set up chat monitoring for peer status changes
+        self.firebase_manager.listen_for_chat_updates(chat_id, self._handle_chat_updates)
+        
+        # Update participant status to online
+        self.firebase_manager.update_chat_participant_status(chat_id, 'online')
         
         # Update header status
         self.chat_status_label.configure(
@@ -1018,39 +1029,63 @@ class GUIManager:
         except Exception as e:
             messagebox.showerror("Error", f"Could not open file: {str(e)}")
     
-    def _end_chat_session(self):
+    def _end_chat_session(self, show_confirmation=True):
         """End the current chat session."""
         if not self.active_chat_session:
             return
         
         peer_email = self.active_chat_session.get('email', 'this user')
-        result = messagebox.askyesno(
-            "End Chat",
-            f"End chat session with {peer_email}?"
+        
+        # Show confirmation dialog only if requested
+        if show_confirmation:
+            result = messagebox.askyesno(
+                "End Chat",
+                f"End chat session with {peer_email}?"
+            )
+            if not result:
+                return
+        
+        # Get chat and user info before clearing session
+        current_uid = self.current_user.get('uid', '') if self.current_user else ''
+        peer_uid = self.active_chat_session.get('uid', '')
+        chat_id = self.active_chat_session.get('chat_id', '')
+        
+        # Notify peer about chat termination via Firebase
+        if chat_id:
+            self.firebase_manager.update_chat_participant_status(chat_id, 'terminated')
+            # Stop listening for chat updates
+            self.firebase_manager.stop_listening(f"chats/{chat_id}")
+        
+        # Send termination message via network if connected
+        try:
+            if hasattr(self, 'network_manager') and self.network_manager:
+                termination_message = {
+                    'type': 'chat_terminated',
+                    'sender': current_uid,
+                    'content': {'reason': 'user_initiated'}
+                }
+                # This would be sent via network manager to connected peer
+                # self.network_manager.send_message(peer_uid, termination_message)
+        except Exception as e:
+            print(f"Failed to send termination message: {e}")
+        
+        # Clear session data
+        session_keys = [f"{current_uid}-{peer_uid}", f"{peer_uid}-{current_uid}"]
+        for key in session_keys:
+            self.active_sessions.pop(key, None)
+        
+        self.active_chat_session = None
+        
+        # Update header status
+        self.chat_status_label.configure(
+            text="No active chat",
+            text_color=("#e3f2fd", "#a0a0a0")
         )
         
-        if result:
-            # Clear session data
-            current_uid = self.current_user.get('uid', '') if self.current_user else ''
-            peer_uid = self.active_chat_session.get('uid', '')
-            
-            # Remove from active sessions
-            session_keys = [f"{current_uid}-{peer_uid}", f"{peer_uid}-{current_uid}"]
-            for key in session_keys:
-                self.active_sessions.pop(key, None)
-            
-            self.active_chat_session = None
-            
-            # Update header status
-            self.chat_status_label.configure(
-                text="No active chat",
-                text_color=("#e3f2fd", "#a0a0a0")
-            )
-            
-            # Return to map and refresh
-            self._show_user_map()
-            # Force immediate refresh of user map
-            self.root.after(100, self._load_users_on_map)
+        # Return to map and refresh
+        self._show_user_map()
+        # Force immediate refresh of user map
+        self.root.after(100, self._load_users_on_map)
     
     def _refresh_user_map(self):
         """Refresh the user map."""
@@ -1219,6 +1254,47 @@ class GUIManager:
         """Handle session key exchange."""
         if self.active_chat_session and self.current_view == "chat":
             self._add_message_to_chat("System", "Encryption keys exchanged", is_own=False)
+    
+    def _handle_chat_updates(self, chat_data):
+        """Handle Firebase chat updates (peer status changes)."""
+        if not self.active_chat_session or not chat_data:
+            return
+        
+        try:
+            participants = chat_data.get('participants', {})
+            current_uid = self.current_user.get('uid', '') if self.current_user else ''
+            peer_uid = self.active_chat_session.get('uid', '')
+            
+            # Check if peer has terminated the chat
+            peer_status = participants.get(peer_uid, {}).get('status', '')
+            if peer_status == 'terminated':
+                # Peer has ended the chat, terminate our side too
+                self.root.after(0, lambda: self._handle_peer_chat_termination())
+                
+        except Exception as e:
+            print(f"Error handling chat updates: {e}")
+    
+    def _handle_chat_termination(self, message, peer_id):
+        """Handle incoming chat termination message via network."""
+        if self.active_chat_session:
+            # Peer terminated chat via network message
+            self.root.after(0, lambda: self._handle_peer_chat_termination())
+    
+    def _handle_peer_chat_termination(self):
+        """Handle when peer terminates the chat session."""
+        if not self.active_chat_session:
+            return
+        
+        peer_email = self.active_chat_session.get('email', 'Unknown')
+        
+        # Show notification that peer ended the chat
+        messagebox.showinfo(
+            "Chat Ended",
+            f"{peer_email} has ended the chat session."
+        )
+        
+        # End chat session without showing confirmation
+        self._end_chat_session(show_confirmation=False)
     
     def _handle_login(self):
         """Handle login."""
