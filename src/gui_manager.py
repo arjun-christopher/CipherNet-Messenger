@@ -829,7 +829,7 @@ class GUIManager:
         header_frame = ctk.CTkFrame(
             parent,
             height=60,
-            fg_color=("#128c7e", "#075e54"),
+            fg_color=("#1e88e5", "#1565c0"),
             corner_radius=0
         )
         header_frame.pack(fill="x", padx=0, pady=0)
@@ -840,7 +840,7 @@ class GUIManager:
             header_frame,
             width=40,
             height=40,
-            fg_color=("#dcf8c6", "#128c7e"),
+            fg_color=("#e3f2fd", "#1e88e5"),
             corner_radius=20
         )
         avatar_frame.pack(side="left", padx=15, pady=10)
@@ -850,7 +850,7 @@ class GUIManager:
             avatar_frame,
             text=peer_email[0].upper(),
             font=ctk.CTkFont(size=16, weight="bold"),
-            text_color=("#075e54", "white")
+            text_color=("#1565c0", "white")
         ).pack(expand=True)
         
         # User info
@@ -870,7 +870,7 @@ class GUIManager:
             info_frame,
             text="� Connecting...",
             font=ctk.CTkFont(size=10),
-            text_color=("#dcf8c6", "#a0a0a0"),
+            text_color=("#e3f2fd", "#a0a0a0"),
             anchor="w"
         )
         status_label.pack(anchor="w", pady=(0, 8))
@@ -920,7 +920,7 @@ class GUIManager:
             command=lambda: self._send_integrated_message(peer_id, message_entry),
             width=30,
             height=30,
-            fg_color=("#128c7e", "#075e54"),
+            fg_color=("#1e88e5", "#1565c0"),
             corner_radius=15,
             font=ctk.CTkFont(size=12, weight="bold")
         )
@@ -1015,7 +1015,7 @@ class GUIManager:
         if is_own:
             bubble_frame = ctk.CTkFrame(
                 msg_container,
-                fg_color=("#dcf8c6", "#056162"),
+                fg_color=("#e3f2fd", "#0d47a1"),
                 corner_radius=15
             )
             bubble_frame.pack(side="right", padx=(50, 0))
@@ -1329,7 +1329,7 @@ class ChatWindow:
             # Own messages - right aligned
             bubble_frame = ctk.CTkFrame(
                 msg_container,
-                fg_color=("#dcf8c6", "#276DC9"), 
+                fg_color=("#e3f2fd", "#276DC9"), 
                 corner_radius=15
             )
             bubble_frame.pack(side="right", padx=(50, 0))
@@ -1446,7 +1446,7 @@ class ChatWindow:
             header_frame,
             width=45,
             height=45,
-            fg_color=("#dcf8c6", "#538ee6bc"),
+            fg_color=("#e3f2fd", "#538ee6bc"),
             corner_radius=22
         )
         avatar_frame.pack(side="left", padx=15, pady=12)
@@ -1480,7 +1480,7 @@ class ChatWindow:
             info_frame,
             text="🟢 Online • End-to-end encrypted",
             font=ctk.CTkFont(size=11),
-            text_color=("#dcf8c6", "#a0a0a0"),
+            text_color=("#e3f2fd", "#a0a0a0"),
             anchor="w"
         )
         self.status_label.pack(anchor="w", pady=(0, 8))
