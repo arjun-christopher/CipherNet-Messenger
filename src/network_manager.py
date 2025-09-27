@@ -60,6 +60,9 @@ class NetworkManager:
         try:
             self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 65536)
+            self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 65536)
             self.server_socket.bind((self.local_ip, self.port))
             self.server_socket.listen(5)
             
@@ -109,7 +112,14 @@ class NetworkManager:
                 return True
             
             client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            client_socket.settimeout(self.config.get('network.connection_timeout', 30))
+            
+            # Configure socket for better stability
+            client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 65536)
+            client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 65536)
+            
+            client_socket.settimeout(self.config.get('network.connection_timeout', 60))
             client_socket.connect((peer_ip, peer_port))
             
             # Send handshake
@@ -416,8 +426,14 @@ class NetworkManager:
         """
         peer_id = None
         try:
+            # Configure client socket for better stability
+            client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 65536)
+            client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 65536)
+            
             # Wait for handshake
-            client_socket.settimeout(30)
+            client_socket.settimeout(60)
             data = self._receive_raw_message(client_socket)
             
             if data:
@@ -455,16 +471,34 @@ class NetworkManager:
             peer_id: Peer identifier
         """
         try:
+            # Set socket timeout for receiving messages
+            conn.settimeout(300)  # 5 minutes timeout for receiving
+            
             while self.is_running and peer_id in self.client_connections:
-                data = self._receive_raw_message(conn)
-                if not data:
-                    break
-                
                 try:
-                    message = json.loads(data)
-                    self._process_received_message(message, peer_id)
-                except json.JSONDecodeError as e:
-                    print(f"Invalid JSON from {peer_id}: {e}")
+                    data = self._receive_raw_message(conn)
+                    if not data:
+                        print(f"No data received from {peer_id}, connection may be closed")
+                        break
+                    
+                    try:
+                        message = json.loads(data)
+                        self._process_received_message(message, peer_id)
+                    except json.JSONDecodeError as e:
+                        print(f"Invalid JSON from {peer_id}: {e}")
+                        continue  # Continue processing other messages
+                        
+                except socket.timeout:
+                    # Check if peer is still connected with a keep-alive
+                    try:
+                        conn.send(b'')  # Try to send empty data to test connection
+                    except:
+                        print(f"Connection timeout with {peer_id}")
+                        break
+                    continue
+                except (ConnectionResetError, ConnectionAbortedError, OSError) as e:
+                    print(f"Connection error with {peer_id}: {e}")
+                    break
                 
         except Exception as e:
             print(f"Error handling peer {peer_id}: {e}")
@@ -525,12 +559,22 @@ class NetworkManager:
             message_bytes = message.encode('utf-8')
             message_length = len(message_bytes)
             
+            # Add a small delay for large messages to prevent overwhelming the connection
+            if message_length > 8192:  # 8KB threshold
+                time.sleep(0.01)  # 10ms delay
+            
             # Send message length first (4 bytes)
             conn.sendall(message_length.to_bytes(4, byteorder='big'))
             # Send message content
             conn.sendall(message_bytes)
+            
+            # Add small delay after sending to ensure data is processed
+            time.sleep(0.001)  # 1ms delay
             return True
             
+        except (ConnectionResetError, ConnectionAbortedError, OSError) as e:
+            print(f"Connection error sending message: {e}")
+            return False
         except Exception as e:
             print(f"Error sending message: {e}")
             return False
@@ -553,6 +597,11 @@ class NetworkManager:
             
             message_length = int.from_bytes(length_bytes, byteorder='big')
             
+            # Validate message length to prevent memory issues
+            if message_length > 10 * 1024 * 1024:  # 10MB limit
+                print(f"Message too large: {message_length} bytes")
+                return None
+            
             # Receive message content
             message_bytes = self._receive_exact(conn, message_length)
             if not message_bytes:
@@ -560,6 +609,9 @@ class NetworkManager:
             
             return message_bytes.decode('utf-8')
             
+        except (ConnectionResetError, ConnectionAbortedError, OSError) as e:
+            print(f"Connection error receiving message: {e}")
+            return None
         except Exception as e:
             print(f"Error receiving message: {e}")
             return None
@@ -577,10 +629,24 @@ class NetworkManager:
         """
         data = b''
         while len(data) < num_bytes:
-            packet = conn.recv(num_bytes - len(data))
-            if not packet:
+            try:
+                bytes_needed = num_bytes - len(data)
+                # Receive in smaller chunks to prevent blocking
+                chunk_size = min(bytes_needed, 8192)  # 8KB chunks
+                packet = conn.recv(chunk_size)
+                
+                if not packet:
+                    return None
+                data += packet
+                
+            except socket.timeout:
+                # If we have partial data, continue trying
+                if len(data) > 0:
+                    continue
+                else:
+                    return None
+            except (ConnectionResetError, ConnectionAbortedError, OSError):
                 return None
-            data += packet
         return data
     
     def _close_connection(self, peer_id: str, conn: socket.socket):

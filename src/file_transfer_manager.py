@@ -8,6 +8,7 @@ Author: Arjun Christopher
 import os
 import json
 import threading
+import time
 from pathlib import Path
 from typing import Dict, Any, Callable, Optional, Tuple
 from PIL import Image
@@ -478,9 +479,26 @@ class FileTransferManager:
                         'authentication': 'HMAC-SHA256'
                     }
                     
-                    success = self.network_manager.send_message(
-                        peer_id, 'file_chunk', chunk_message
-                    )
+                    # Add retry logic for chunk sending
+                    max_retries = 3
+                    retry_count = 0
+                    success = False
+                    
+                    while retry_count < max_retries and not success:
+                        success = self.network_manager.send_message(
+                            peer_id, 'file_chunk', chunk_message
+                        )
+                        
+                        if not success:
+                            retry_count += 1
+                            if retry_count < max_retries:
+                                print(f"Failed to send chunk {chunk_index}, retrying ({retry_count}/{max_retries})...")
+                                time.sleep(0.1)  # 100ms delay before retry
+                            else:
+                                print(f"Failed to send chunk {chunk_index} after {max_retries} attempts")
+                        else:
+                            # Small delay between successful chunk sends to prevent overwhelming
+                            time.sleep(0.05)  # 50ms delay
                     
                     if not success:
                         print("Failed to send file chunk")
