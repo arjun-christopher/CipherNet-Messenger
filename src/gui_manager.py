@@ -377,11 +377,14 @@ class GUIManager:
         
         # Get canvas dimensions
         try:
+            if not self.user_map_canvas:
+                # Canvas is None, cannot proceed
+                return
             self.user_map_canvas.update()
             canvas_width = self.user_map_canvas.winfo_width()
             canvas_height = self.user_map_canvas.winfo_height()
-        except tk.TclError:
-            # Canvas has been destroyed during operation
+        except (tk.TclError, AttributeError):
+            # Canvas has been destroyed during operation or is None
             self.user_map_canvas = None
             return
         
@@ -1090,14 +1093,19 @@ class GUIManager:
         if chat_id:
             print(f"🔄 Terminating chat {chat_id} by user {current_uid}")
             # Update current user's status to 'terminated' and set chat as terminated
-            self.firebase_manager.update_chat_participant_status(chat_id, 'terminated')
-            # Set chat termination flag that both users can see
-            self.firebase_manager.set_chat_terminated(chat_id, current_uid)
-            print(f"✅ Chat termination signals sent for {chat_id}")
-            # Small delay before stopping listener to ensure peer gets the update
-            self.root.after(500, lambda: self.firebase_manager.stop_listening(f"chats/{chat_id}"))
+            participant_update_success = self.firebase_manager.update_chat_participant_status(chat_id, 'terminated')
+            chat_terminate_success = self.firebase_manager.set_chat_terminated(chat_id, current_uid)
+            print(f"📊 Firebase updates - Participant: {participant_update_success}, Chat: {chat_terminate_success}")
+            
+            # If network message failed and this is critical, give Firebase more time
+            delay = 3000 if not network_message_sent else 2000
+            print(f"⏱️ Using {delay}ms delay before stopping listener (network_sent: {network_message_sent})")
+            # Longer delay before stopping listener to ensure peer gets the update
+            # This is critical when network messages fail and Firebase is the backup
+            self.root.after(delay, lambda: self.firebase_manager.stop_listening(f"chats/{chat_id}"))
         
         # Send termination message via network if connected
+        network_message_sent = False
         try:
             if hasattr(self, 'network_manager') and self.network_manager:
                 termination_content = {
@@ -1106,10 +1114,13 @@ class GUIManager:
                 }
                 print(f"📡 Sending network termination message to {peer_uid}")
                 # Send via network manager to connected peer
-                self.network_manager.send_message(peer_uid, 'chat_terminated', termination_content)
-                print(f"✅ Network termination message sent to {peer_uid}")
+                network_message_sent = self.network_manager.send_message(peer_uid, 'chat_terminated', termination_content)
+                if network_message_sent:
+                    print(f"✅ Network termination message sent to {peer_uid}")
+                else:
+                    print(f"❌ Network termination message failed - peer not connected. Firebase backup will handle this.")
         except Exception as e:
-            print(f"Failed to send termination message: {e}")
+            print(f"❌ Failed to send network termination message: {e}. Firebase backup will handle this.")
         
         # Clear session data
         session_keys = [f"{current_uid}-{peer_uid}", f"{peer_uid}-{current_uid}"]
