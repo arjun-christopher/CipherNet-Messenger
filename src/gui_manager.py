@@ -730,10 +730,10 @@ class ChatWindow:
         
         # Message bubble frame
         if is_own:
-            # Own messages - right aligned, green bubble
+            # Own messages - right aligned
             bubble_frame = ctk.CTkFrame(
                 msg_container,
-                fg_color=("#dcf8c6", "#056162"),  # WhatsApp green
+                fg_color=("#dcf8c6", "#276DC9"), 
                 corner_radius=15
             )
             bubble_frame.pack(side="right", padx=(50, 0))
@@ -752,7 +752,7 @@ class ChatWindow:
             # Timestamp with read status
             time_label = ctk.CTkLabel(
                 bubble_frame,
-                text=f"{timestamp} ✓✓",
+                text=f"{timestamp}",
                 font=ctk.CTkFont(size=10),
                 text_color=("#718096", "#a0a0a0")
             )
@@ -773,7 +773,7 @@ class ChatWindow:
                     bubble_frame,
                     text=sender.split('@')[0].title(),
                     font=ctk.CTkFont(size=12, weight="bold"),
-                    text_color=("#128c7e", "#10b981")
+                    text_color=("#538ee6bc", "#2542e7")
                 )
                 sender_label.pack(padx=15, pady=(8, 0), anchor="w")
             
@@ -839,7 +839,7 @@ class ChatWindow:
         header_frame = ctk.CTkFrame(
             self.window, 
             height=70,
-            fg_color=("#128c7e", "#075e54"),  # WhatsApp green
+            fg_color=("#538ee6bc", "#2542e7"),
             corner_radius=0
         )
         header_frame.pack(fill="x", padx=0, pady=0)
@@ -850,7 +850,7 @@ class ChatWindow:
             header_frame,
             width=45,
             height=45,
-            fg_color=("#dcf8c6", "#128c7e"),
+            fg_color=("#dcf8c6", "#538ee6bc"),
             corner_radius=22
         )
         avatar_frame.pack(side="left", padx=15, pady=12)
@@ -861,7 +861,7 @@ class ChatWindow:
             avatar_frame,
             text=self.peer_email[0].upper(),
             font=ctk.CTkFont(size=18, weight="bold"),
-            text_color=("#075e54", "white")
+            text_color=("#538ee6bc", "white")
         )
         avatar_label.pack(expand=True)
         
@@ -901,7 +901,7 @@ class ChatWindow:
             width=35,
             height=35,
             fg_color="transparent",
-            hover_color=("#128c7e", "#054d44"),
+            hover_color=("#538ee6bc", "#2542e7"),
             font=ctk.CTkFont(size=16)
         )
         file_button.pack(side="right", padx=(5, 0))
@@ -914,7 +914,7 @@ class ChatWindow:
             width=35,
             height=35,
             fg_color="transparent",
-            hover_color=("#128c7e", "#054d44"),
+            hover_color=("#538ee6bc", "#2542e7"),
             font=ctk.CTkFont(size=16)
         )
         options_button.pack(side="right", padx=(5, 0))
@@ -925,8 +925,8 @@ class ChatWindow:
         self.messages_frame = ctk.CTkScrollableFrame(
             self.window,
             fg_color=("#e5ddd5", "#0a1014"),  # WhatsApp chat background
-            scrollbar_button_color=("#128c7e", "#075e54"),
-            scrollbar_button_hover_color=("#075e54", "#128c7e")
+            scrollbar_button_color=("#538ee6bc", "#2542e7"),
+            scrollbar_button_hover_color=("#2542e7", "#538ee6bc")
         )
         self.messages_frame.pack(fill="both", expand=True, padx=0, pady=0)
         
@@ -988,8 +988,8 @@ class ChatWindow:
             command=self._send_message,
             width=35,
             height=35,
-            fg_color=("#128c7e", "#075e54"),
-            hover_color=("#075e54", "#128c7e"),
+            fg_color=("#538ee6bc", "#2542e7"),
+            hover_color=("#2542e7", "#538ee6bc"),
             corner_radius=17,
             font=ctk.CTkFont(size=14, weight="bold")
         )
@@ -1103,7 +1103,7 @@ class ChatWindow:
         message_text = self.message_entry.get().strip()
         if message_text:
             self.send_button.configure(
-                fg_color=("#128c7e", "#075e54"),
+                fg_color=("#538ee6bc", "#2542e7"),
                 text="➤"
             )
         else:
