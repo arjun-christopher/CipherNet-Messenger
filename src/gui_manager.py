@@ -561,50 +561,21 @@ class ChatWindow:
         self.window.protocol("WM_DELETE_WINDOW", self._on_close)
     
     def _setup_ui(self):
-        """Setup the chat window UI."""
-        # Header
-        header_frame = ctk.CTkFrame(self.window, height=50)
-        header_frame.pack(fill="x", padx=5, pady=5)
-        header_frame.pack_propagate(False)
+        """Setup modern Instagram/WhatsApp-inspired chat UI."""
+        # Initialize message storage
+        self.messages = []
         
-        title_label = ctk.CTkLabel(
-            header_frame,
-            text=f"Chatting with {self.peer_email}",
-            font=ctk.CTkFont(size=14, weight="bold")
-        )
-        title_label.pack(side="left", padx=15, pady=15)
+        # Modern Header - WhatsApp style
+        self._create_modern_header()
         
-        # File button
-        file_button = ctk.CTkButton(
-            header_frame,
-            text="Send File",
-            command=self._send_file,
-            width=80
-        )
-        file_button.pack(side="right", padx=15, pady=10)
+        # Messages Container with custom scrolling
+        self._create_messages_area()
         
-        # Chat area
-        self.chat_text = ctk.CTkTextbox(self.window, state="disabled")
-        self.chat_text.pack(fill="both", expand=True, padx=5, pady=(0, 5))
+        # Modern Input Area - Instagram/WhatsApp style  
+        self._create_modern_input_area()
         
-        # Input area
-        input_frame = ctk.CTkFrame(self.window, height=60)
-        input_frame.pack(fill="x", padx=5, pady=(0, 5))
-        input_frame.pack_propagate(False)
-        
-        self.message_entry = ctk.CTkEntry(input_frame, placeholder_text="Type your message...")
-        self.message_entry.pack(side="left", fill="x", expand=True, padx=(10, 5), pady=15)
-        
-        send_button = ctk.CTkButton(
-            input_frame,
-            text="Send",
-            command=self._send_message,
-            width=60
-        )
-        send_button.pack(side="right", padx=(0, 10), pady=15)
-        
-        # Bind Enter key
-        self.message_entry.bind('<Return>', lambda e: self._send_message())
+        # Add welcome message
+        self._add_system_message("🔒 Secure end-to-end encrypted chat established")
     
     def _register_handlers(self):
         """Register network message handlers."""
@@ -676,33 +647,422 @@ class ChatWindow:
             self._add_system_message("Secure session established")
     
     def _add_message(self, sender: str, message: str, is_own: bool = False):
-        """Add message to chat display."""
-        timestamp = datetime.now().strftime("%H:%M:%S")
+        """Add modern message bubble to chat display."""
+        timestamp = datetime.now().strftime("%H:%M")
         
-        self.chat_text.configure(state="normal")
+        # Store message data
+        message_data = {
+            'sender': sender,
+            'message': message,
+            'timestamp': timestamp,
+            'is_own': is_own
+        }
+        self.messages.append(message_data)
         
+        # Create message bubble
+        self._create_message_bubble(message_data)
+        
+        # Auto-scroll to bottom
+        self.messages_frame._parent_canvas.yview_moveto(1.0)
+        
+    def _create_message_bubble(self, message_data):
+        """Create a modern message bubble."""
+        is_own = message_data['is_own']
+        message = message_data['message']
+        timestamp = message_data['timestamp']
+        sender = message_data['sender']
+        
+        # Message container
+        msg_container = ctk.CTkFrame(
+            self.messages_frame,
+            fg_color="transparent"
+        )
+        msg_container.pack(fill="x", padx=10, pady=2)
+        
+        # Message bubble frame
         if is_own:
-            self.chat_text.insert(tk.END, f"[{timestamp}] You: {message}\n")
+            # Own messages - right aligned, green bubble
+            bubble_frame = ctk.CTkFrame(
+                msg_container,
+                fg_color=("#dcf8c6", "#056162"),  # WhatsApp green
+                corner_radius=15
+            )
+            bubble_frame.pack(side="right", padx=(50, 0))
+            
+            # Message text
+            msg_label = ctk.CTkLabel(
+                bubble_frame,
+                text=message,
+                font=ctk.CTkFont(size=14),
+                text_color=("#2d3748", "white"),
+                wraplength=300,
+                justify="left"
+            )
+            msg_label.pack(padx=15, pady=(10, 5))
+            
+            # Timestamp with read status
+            time_label = ctk.CTkLabel(
+                bubble_frame,
+                text=f"{timestamp} ✓✓",
+                font=ctk.CTkFont(size=10),
+                text_color=("#718096", "#a0a0a0")
+            )
+            time_label.pack(padx=15, pady=(0, 8), anchor="e")
+            
         else:
-            self.chat_text.insert(tk.END, f"[{timestamp}] {sender}: {message}\n")
-        
-        self.chat_text.configure(state="disabled")
-        self.chat_text.see(tk.END)
+            # Other messages - left aligned, white/gray bubble
+            bubble_frame = ctk.CTkFrame(
+                msg_container,
+                fg_color=("white", "#1f2937"),
+                corner_radius=15
+            )
+            bubble_frame.pack(side="left", padx=(0, 50))
+            
+            # Sender name (if not own message)
+            if sender != "You":
+                sender_label = ctk.CTkLabel(
+                    bubble_frame,
+                    text=sender.split('@')[0].title(),
+                    font=ctk.CTkFont(size=12, weight="bold"),
+                    text_color=("#128c7e", "#10b981")
+                )
+                sender_label.pack(padx=15, pady=(8, 0), anchor="w")
+            
+            # Message text
+            msg_label = ctk.CTkLabel(
+                bubble_frame,
+                text=message,
+                font=ctk.CTkFont(size=14),
+                text_color=("#2d3748", "white"),
+                wraplength=300,
+                justify="left"
+            )
+            msg_label.pack(padx=15, pady=(5, 5))
+            
+            # Timestamp
+            time_label = ctk.CTkLabel(
+                bubble_frame,
+                text=timestamp,
+                font=ctk.CTkFont(size=10),
+                text_color=("#718096", "#a0a0a0")
+            )
+            time_label.pack(padx=15, pady=(0, 8), anchor="w")
     
     def _add_system_message(self, message: str):
-        """Add system message to chat display."""
-        timestamp = datetime.now().strftime("%H:%M:%S")
+        """Add system message with modern styling."""
+        timestamp = datetime.now().strftime("%H:%M")
         
-        self.chat_text.configure(state="normal")
-        self.chat_text.insert(tk.END, f"[{timestamp}] System: {message}\n")
-        self.chat_text.configure(state="disabled")
-        self.chat_text.see(tk.END)
+        # System message container - centered
+        sys_container = ctk.CTkFrame(
+            self.messages_frame,
+            fg_color="transparent"
+        )
+        sys_container.pack(fill="x", padx=10, pady=5)
+        
+        # System message bubble - centered, subtle styling
+        sys_bubble = ctk.CTkFrame(
+            sys_container,
+            fg_color=("#f7fafc", "#374151"),
+            corner_radius=20
+        )
+        sys_bubble.pack(anchor="center")
+        
+        # System message text
+        sys_label = ctk.CTkLabel(
+            sys_bubble,
+            text=message,
+            font=ctk.CTkFont(size=12),
+            text_color=("#718096", "#9ca3af")
+        )
+        sys_label.pack(padx=20, pady=8)
+        
+        # Auto-scroll to bottom
+        self.messages_frame._parent_canvas.yview_moveto(1.0)
     
     def _on_close(self):
         """Handle window close."""
         self.network_manager.disconnect_from_peer(self.peer_id)
         self.window.destroy()
     
+    def _create_modern_header(self):
+        """Create modern header with user info and actions."""
+        # Header with gradient-like effect
+        header_frame = ctk.CTkFrame(
+            self.window, 
+            height=70,
+            fg_color=("#128c7e", "#075e54"),  # WhatsApp green
+            corner_radius=0
+        )
+        header_frame.pack(fill="x", padx=0, pady=0)
+        header_frame.pack_propagate(False)
+        
+        # User avatar placeholder (could be enhanced with actual avatars)
+        avatar_frame = ctk.CTkFrame(
+            header_frame,
+            width=45,
+            height=45,
+            fg_color=("#dcf8c6", "#128c7e"),
+            corner_radius=22
+        )
+        avatar_frame.pack(side="left", padx=15, pady=12)
+        avatar_frame.pack_propagate(False)
+        
+        # Avatar text (first letter of email)
+        avatar_label = ctk.CTkLabel(
+            avatar_frame,
+            text=self.peer_email[0].upper(),
+            font=ctk.CTkFont(size=18, weight="bold"),
+            text_color=("#075e54", "white")
+        )
+        avatar_label.pack(expand=True)
+        
+        # User info section
+        info_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
+        info_frame.pack(side="left", fill="both", expand=True, padx=(5, 0))
+        
+        # User name
+        name_label = ctk.CTkLabel(
+            info_frame,
+            text=self.peer_email.split('@')[0].title(),
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color="white",
+            anchor="w"
+        )
+        name_label.pack(anchor="w", pady=(8, 0))
+        
+        # Status
+        self.status_label = ctk.CTkLabel(
+            info_frame,
+            text="🟢 Online • End-to-end encrypted",
+            font=ctk.CTkFont(size=11),
+            text_color=("#dcf8c6", "#a0a0a0"),
+            anchor="w"
+        )
+        self.status_label.pack(anchor="w", pady=(0, 8))
+        
+        # Action buttons frame
+        actions_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
+        actions_frame.pack(side="right", padx=10, pady=10)
+        
+        # File/attachment button - modern icon style
+        file_button = ctk.CTkButton(
+            actions_frame,
+            text="📎",
+            command=self._send_file,
+            width=35,
+            height=35,
+            fg_color="transparent",
+            hover_color=("#128c7e", "#054d44"),
+            font=ctk.CTkFont(size=16)
+        )
+        file_button.pack(side="right", padx=(5, 0))
+        
+        # More options button
+        options_button = ctk.CTkButton(
+            actions_frame,
+            text="⋮",
+            command=self._show_options_menu,
+            width=35,
+            height=35,
+            fg_color="transparent",
+            hover_color=("#128c7e", "#054d44"),
+            font=ctk.CTkFont(size=16)
+        )
+        options_button.pack(side="right", padx=(5, 0))
+        
+    def _create_messages_area(self):
+        """Create modern messages area with custom styling."""
+        # Messages container with WhatsApp-like background
+        self.messages_frame = ctk.CTkScrollableFrame(
+            self.window,
+            fg_color=("#e5ddd5", "#0a1014"),  # WhatsApp chat background
+            scrollbar_button_color=("#128c7e", "#075e54"),
+            scrollbar_button_hover_color=("#075e54", "#128c7e")
+        )
+        self.messages_frame.pack(fill="both", expand=True, padx=0, pady=0)
+        
+        # Configure scrollbar
+        self.messages_frame._scrollbar.configure(width=8)
+        
+    def _create_modern_input_area(self):
+        """Create modern input area with emoji and media buttons."""
+        # Input container - elevated design
+        input_container = ctk.CTkFrame(
+            self.window,
+            height=70,
+            fg_color=("#f0f2f5", "#1e2428"),
+            corner_radius=0
+        )
+        input_container.pack(fill="x", padx=0, pady=0)
+        input_container.pack_propagate(False)
+        
+        # Main input frame
+        input_frame = ctk.CTkFrame(
+            input_container,
+            fg_color=("white", "#2a2f32"),
+            corner_radius=25,
+            height=45
+        )
+        input_frame.pack(fill="x", padx=12, pady=12)
+        input_frame.pack_propagate(False)
+        
+        # Emoji button
+        emoji_button = ctk.CTkButton(
+            input_frame,
+            text="😊",
+            command=self._show_emoji_picker,
+            width=35,
+            height=35,
+            fg_color="transparent",
+            hover_color=("#f5f5f5", "#404040"),
+            text_color=("#8696a0", "#8696a0"),
+            font=ctk.CTkFont(size=16)
+        )
+        emoji_button.pack(side="left", padx=(10, 5), pady=5)
+        
+        # Message input - modern styling
+        self.message_entry = ctk.CTkEntry(
+            input_frame,
+            placeholder_text="Type a message...",
+            font=ctk.CTkFont(size=14),
+            fg_color="transparent",
+            border_width=0,
+            text_color=("#3b4a54", "white"),
+            placeholder_text_color=("#8696a0", "#8696a0")
+        )
+        self.message_entry.pack(side="left", fill="x", expand=True, padx=(5, 5), pady=5)
+        
+        # Send button - modern circular design
+        self.send_button = ctk.CTkButton(
+            input_frame,
+            text="➤",
+            command=self._send_message,
+            width=35,
+            height=35,
+            fg_color=("#128c7e", "#075e54"),
+            hover_color=("#075e54", "#128c7e"),
+            corner_radius=17,
+            font=ctk.CTkFont(size=14, weight="bold")
+        )
+        self.send_button.pack(side="right", padx=(5, 10), pady=5)
+        
+        # Bind events
+        self.message_entry.bind('<Return>', lambda e: self._send_message())
+        self.message_entry.bind('<KeyPress>', self._on_typing)
+        self.message_entry.bind('<FocusIn>', lambda e: self._update_send_button())
+        self.message_entry.bind('<KeyRelease>', lambda e: self._update_send_button())
+        
+    def _show_emoji_picker(self):
+        """Show emoji picker (placeholder - could be enhanced with actual emoji picker)."""
+        # Simple emoji options for now
+        emojis = ["😊", "😂", "❤️", "👍", "😢", "😮", "😡", "🎉", "🔥", "✨"]
+        
+        # Create a simple popup with common emojis
+        emoji_window = ctk.CTkToplevel(self.window)
+        emoji_window.title("Emojis")
+        emoji_window.geometry("300x100")
+        emoji_window.transient(self.window)
+        emoji_window.grab_set()
+        
+        # Center the popup
+        emoji_window.geometry("+%d+%d" % (
+            self.window.winfo_rootx() + 50,
+            self.window.winfo_rooty() + 50
+        ))
+        
+        frame = ctk.CTkFrame(emoji_window)
+        frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        for i, emoji in enumerate(emojis):
+            row = i // 5
+            col = i % 5
+            
+            btn = ctk.CTkButton(
+                frame,
+                text=emoji,
+                width=40,
+                height=40,
+                font=ctk.CTkFont(size=16),
+                command=lambda e=emoji: self._insert_emoji(e, emoji_window)
+            )
+            btn.grid(row=row, column=col, padx=2, pady=2)
+            
+    def _insert_emoji(self, emoji, window):
+        """Insert selected emoji into message entry."""
+        current_text = self.message_entry.get()
+        self.message_entry.delete(0, "end")
+        self.message_entry.insert(0, current_text + emoji)
+        window.destroy()
+        self.message_entry.focus()
+        
+    def _show_options_menu(self):
+        """Show options menu (placeholder for future features)."""
+        # Could include options like: Clear chat, Block user, Report, etc.
+        options_window = ctk.CTkToplevel(self.window)
+        options_window.title("Chat Options")
+        options_window.geometry("200x150")
+        options_window.transient(self.window)
+        options_window.grab_set()
+        
+        # Center the popup
+        options_window.geometry("+%d+%d" % (
+            self.window.winfo_rootx() + 100,
+            self.window.winfo_rooty() + 50
+        ))
+        
+        frame = ctk.CTkFrame(options_window)
+        frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        # Clear chat option
+        clear_btn = ctk.CTkButton(
+            frame,
+            text="🗑️ Clear Chat",
+            command=lambda: self._clear_chat(options_window),
+            width=180
+        )
+        clear_btn.pack(pady=5)
+        
+        # Close option
+        close_btn = ctk.CTkButton(
+            frame,
+            text="❌ Close Chat",
+            command=lambda: self._close_chat(options_window),
+            width=180
+        )
+        close_btn.pack(pady=5)
+        
+    def _clear_chat(self, window):
+        """Clear all messages from chat."""
+        for widget in self.messages_frame.winfo_children():
+            widget.destroy()
+        self.messages = []
+        self._add_system_message("🗑️ Chat cleared")
+        window.destroy()
+        
+    def _close_chat(self, window):
+        """Close the chat window."""
+        window.destroy()
+        self._on_close()
+        
+    def _on_typing(self, event):
+        """Handle typing events for better UX."""
+        # Could be used to show typing indicators in the future
+        self._update_send_button()
+        
+    def _update_send_button(self):
+        """Update send button appearance based on message content."""
+        message_text = self.message_entry.get().strip()
+        if message_text:
+            self.send_button.configure(
+                fg_color=("#128c7e", "#075e54"),
+                text="➤"
+            )
+        else:
+            self.send_button.configure(
+                fg_color=("#8696a0", "#404040"),
+                text="➤"
+            )
+            
     def destroy(self):
         """Destroy the chat window."""
         self.window.destroy()
