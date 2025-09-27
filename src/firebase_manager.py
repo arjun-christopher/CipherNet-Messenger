@@ -134,7 +134,7 @@ class FirebaseManager:
             
             online_users = []
             current_time = int(time.time() * 1000)
-            timeout = 5 * 60 * 1000  # 5 minutes timeout
+            timeout = 30 * 60 * 1000  # 30 minutes timeout
             
             for uid, user_data in data.items():
                 # Skip current user and check if user is recently active
