@@ -15,15 +15,14 @@ CipherNet Messenger is a secure, decentralized peer-to-peer messaging applicatio
 - **End-to-End Encryption**: Hybrid RSA-Blowfish cryptosystem for maximum security
 - **Peer-to-Peer Architecture**: Direct communication without central server dependency
 - **Data Integrity**: SHA-256 based integrity controls for all communications
-- **Private Peer Discovery**: Secure user discovery without exposing IP addresses
-- **Secure File Transfer**: Encrypted file sharing with integrity verification
+- **Map-Based User Discovery**: Interactive canvas-based interface for finding online users
+- **Single Chat Session Management**: One-to-one chat sessions with duplicate prevention
+- **Secure File Transfer**: Upload and share files with visual chat integration
+- **Clean Professional UI**: Modern interface without emojis for accessibility
+- **Real-time Status Updates**: Automatic refresh and bidirectional request handling
 - **Single Session Enforcement**: Prevents concurrent logins for enhanced security
-- **Modern Chat UI**: Instagram/WhatsApp-inspired interface with message bubbles
-- **Interactive Features**: Emoji picker, options menu, and modern input area
-- **Real-time Messaging**: Instant message delivery with read receipts
+- **Comprehensive Cleanup**: Zero-delay deletion of all session data on exit
 - **Desktop Notifications**: Cross-platform notification system
-- **Bidirectional Chat Requests**: Real-time request/response handling with automatic cleanup
-- **Instant Data Cleanup**: Zero-delay deletion of chat and session data on exit
 - **Python 3.13 Compatible**: Updated for latest Python version compatibility
 - **Automated Database Maintenance**: Background cleanup of stale Firebase data
 
@@ -219,43 +218,91 @@ Login blocked: Another user (user2@gmail.com) is already logged in on this syste
 
 ## Modern User Interface
 
-### Instagram/WhatsApp-Inspired Design
+### Map-Based User Discovery Interface
 
-CipherNet features a modern, intuitive chat interface inspired by popular messaging platforms:
+CipherNet features a revolutionary map-based interface for user discovery and interaction:
 
-#### Visual Design
-- **WhatsApp-Style Header**: Gradient green theme with user avatars and status indicators
-- **Message Bubbles**: Distinctive styling for own messages (green, right-aligned) and received messages (white/gray, left-aligned)
-- **User Avatars**: Circular avatar displays with first letter of user's email
-- **Modern Color Scheme**: Professional color palette with dark/light mode support
-- **Clean Typography**: Readable fonts with proper spacing and hierarchy
+#### Map-Based Discovery
+- **Interactive Canvas**: Users appear as positioned elements on a visual map
+- **Random Coordinate Placement**: Dynamic user positioning for visual variety
+- **Click-to-Connect**: Simple click interaction to initiate chat requests
+- **Real-time Status Updates**: Live indicators for user availability and activity
+- **Clean Visual Design**: Professional blue color scheme (#1e88e5, #1565c0, #e3f2fd)
 
-#### Interactive Features
-- **Emoji Picker**: Quick access to common emojis (😊, ❤️, 👍, etc.)
-- **Options Menu**: Chat management (clear chat, close chat) with modern popup design
-- **Dynamic Send Button**: Visual feedback based on message content
-- **Auto-Scroll**: Automatic scrolling to latest messages
-- **Typing Detection**: Enhanced input handling for better user experience
+#### Single Session Management
+- **One Chat at a Time**: Users can only engage in one conversation simultaneously
+- **Duplicate Prevention**: System prevents multiple sessions between same users
+- **Active Session Tracking**: Comprehensive monitoring of all active connections
+- **Automatic Status Management**: Real-time busy/available status updates
 
-#### Chat Experience
+#### Chat Interface
+- **Clean Message Bubbles**: Professional styling without emojis for accessibility
+- **File Upload Integration**: Drag-and-drop file sharing with visual feedback
 - **Message Timestamps**: Clean time display (HH:MM format)
-- **Read Receipts**: Double checkmark (✓✓) for sent messages
-- **System Messages**: Centered notifications for connection status and security updates
-- **Responsive Layout**: Adaptive design that works across different screen sizes
-- **Custom Scrollbar**: Themed scrollbar matching the overall design
+- **Auto-Scroll**: Automatic scrolling to latest messages
+- **Responsive Layout**: Adaptive design across different screen sizes
 
-#### Technical Implementation
-- **CustomTkinter Framework**: Modern widgets with native OS styling
-- **Scrollable Message Container**: Efficient handling of long conversation history
-- **Error Handling**: Graceful degradation with user-friendly error messages
-- **Performance Optimized**: Smooth scrolling and responsive interactions
+#### File Sharing Features
+- **Visual File Upload**: Green file button positioned left of message input
+- **File Type Recognition**: Color-coded indicators for different file types
+  - Images: Red (#ff6b6b)
+  - Documents: Teal (#4ecdc4)
+  - Archives: Blue (#45b7d1)
+  - Other Files: Green (#96ceb4)
+- **File Information Display**: Shows filename, size, and type in chat
+- **Cross-Platform File Opening**: Automatic file opening with system defaults
+- **Integrated Chat Display**: Files appear as rich message bubbles
 
-### Instant Data Management
+#### Professional Design
+- **Text-Only Interface**: Removed all emojis for clean, professional appearance
+- **Accessibility Focused**: High contrast colors and readable typography
+- **Modern Framework**: CustomTkinter with native OS styling
+- **Error Handling**: Graceful degradation with user-friendly messages
 
-- **Zero-Delay Cleanup**: Chat and session data deleted instantly upon app exit
-- **No Grace Periods**: Immediate processing of cleanup operations
-- **Session Enforcement**: Automatic detection and prevention of concurrent logins
-- **Real-time Updates**: Live status indicators and presence management
+#### Real-Time Features
+- **Bidirectional Request Handling**: Both sender and receiver move to chat automatically
+- **Automatic Refresh**: Immediate status updates after chat sessions end
+- **Response Monitoring**: 2-second polling for request acceptances
+- **Live Status Indicators**: Real-time busy/available status management
+
+### Comprehensive Data Management
+
+- **Instant Cleanup**: All session data deleted immediately on exit
+- **Comprehensive Cleanup**: Removes accepted requests, stale requests, inactive chats, and presence data
+- **Session Validation**: Prevents duplicate cleanup calls with flag management
+- **Real-time Updates**: Live status indicators and automatic map refresh
+
+## Recent Updates (Version 2.0)
+
+### **Map-Based Interface Redesign**
+- **Complete UI Overhaul**: Replaced dashboard with interactive map-based user discovery
+- **Canvas-Based Positioning**: Users appear at random coordinates on visual map
+- **Single Session Management**: Enforced one-to-one chat sessions with duplicate prevention
+- **Professional Clean Design**: Removed all emojis for accessibility and professional appearance
+
+### **File Upload Integration**
+- **In-Chat File Sharing**: Upload button integrated into chat interface
+- **Visual File Display**: Rich file messages with type indicators and file information
+- **Cross-Platform Support**: File opening with system default applications
+- **File Type Recognition**: Color-coded indicators for images, documents, archives
+
+### **Enhanced Chat Request Handling**
+- **Bidirectional Automation**: Both sender and receiver automatically enter chat UI
+- **Response Monitoring**: Real-time polling for request acceptances every 2 seconds
+- **Automatic Status Updates**: Immediate refresh after chat sessions end
+- **Duplicate Prevention**: System prevents multiple sessions between same users
+
+### **Comprehensive Cleanup System**
+- **Instant Data Removal**: Zero-delay cleanup of all session data on exit
+- **Complete Firebase Cleanup**: Removes accepted requests, stale requests, inactive chats
+- **Session Management**: Proper authentication state clearing and presence removal
+- **Duplicate Prevention**: Cleanup flags prevent multiple cleanup operations
+
+### **UI/UX Improvements**
+- **Professional Appearance**: Clean, text-only interface without emojis
+- **Real-Time Updates**: Live status indicators and automatic map refresh
+- **Enhanced Navigation**: Removed map button from chat UI for cleaner experience
+- **Improved Accessibility**: High contrast colors and readable typography
 
 ## Project Structure
 
@@ -263,7 +310,7 @@ CipherNet features a modern, intuitive chat interface inspired by popular messag
 CipherNet-Messenger/
 ├── docs/                       # Documentation
 │   ├── Project Report.docx    # Complete project documentation
-│   └── Project Report.txt     # Text version of documentation
+│   ├── Project Report.txt     # Text version of documentation
 ├── src/                        # Source code
 │   ├── main.py                # Application entry point
 │   ├── config.py              # Configuration management
@@ -274,17 +321,10 @@ CipherNet-Messenger/
 │   ├── file_transfer_manager.py # Secure file sharing
 │   ├── gui_manager.py         # User interface (CustomTkinter)
 │   ├── notification_manager.py # Desktop notifications
-│   └── cleanup_manager.py     # Automated Firebase cleanup utilities
-├── tests/                     # Comprehensive test suite
-│   ├── conftest.py           # Test configuration
-│   ├── test_config.py        # Config tests
-│   ├── test_crypto_manager.py # Crypto tests
-│   ├── test_auth_manager.py  # Auth tests
-│   ├── test_network_manager.py # Network tests
-│   ├── test_notification_manager.py # Notification tests
-│   └── run_tests.py         # Test runner
+│   ├── cleanup_manager.py     # Comprehensive Firebase cleanup utilities
+│   └── archives/              # Archived versions for reference
+│       └── gui_manager_backup.py # Previous dashboard implementation
 ├── .env                      # Environment variables (created by setup)
-├── config.json              # Application configuration
 ├── .gitignore               # Git ignore rules
 ├── requirements.txt         # Python dependencies
 ├── setup.py                # Automated setup script
@@ -346,6 +386,8 @@ This project was developed as part of an Information Security course at Puducher
 - Add docstrings for all functions and classes
 - Include comprehensive error handling
 - Write tests for new functionality
+- Maintain clean, professional UI design principles
+- Document significant changes in appropriate markdown files
 
 ## License
 

@@ -197,6 +197,12 @@ class GUIManager:
         
         # Start user discovery
         self._start_user_discovery()
+        
+        # Start monitoring for chat request responses
+        self._start_response_monitoring()
+        
+        # Start monitoring for chat request responses
+        self._start_response_monitoring()
     
     def _create_interface(self):
         """Create the main interface."""
@@ -1041,8 +1047,10 @@ class GUIManager:
                 text_color=("#e3f2fd", "#a0a0a0")
             )
             
-            # Return to map
+            # Return to map and refresh
             self._show_user_map()
+            # Force immediate refresh of user map
+            self.root.after(100, self._load_users_on_map)
     
     def _refresh_user_map(self):
         """Refresh the user map."""
@@ -1053,6 +1061,102 @@ class GUIManager:
         self._load_users_on_map()
         # Refresh every 5 seconds
         self.root.after(5000, self._start_user_discovery)
+    
+    def _start_response_monitoring(self):
+        """Start monitoring for chat request responses."""
+        self._check_request_responses()
+        # Check every 2 seconds for responses
+        self.root.after(2000, self._start_response_monitoring)
+    
+    def _check_request_responses(self):
+        """Check for responses to sent chat requests."""
+        if not self.current_user or self.active_chat_session:
+            return
+        
+        try:
+            responses = self.firebase_manager.check_sent_requests_responses()
+            for response in responses:
+                target_uid = response.get('target_uid')
+                target_email = response.get('target_email')
+                chat_info = response.get('chat_info', {})
+                
+                # Start chat session with the user who accepted
+                peer_user = {'uid': target_uid, 'email': target_email}
+                self._start_chat_session(peer_user)
+                
+                # Connect to peer's network
+                peer_ip = chat_info.get('initiator_ip')
+                if peer_ip:
+                    # Connect to peer (this would normally be handled by network manager)
+                    print(f"Connecting to peer at {peer_ip}")
+                
+                break  # Handle one response at a time
+        except Exception as e:
+            print(f"Error checking request responses: {e}")
+    
+    def _start_response_monitoring(self):
+        """Start monitoring for chat request responses."""
+        self._check_request_responses()
+        # Check every 2 seconds for responses
+        self.root.after(2000, self._start_response_monitoring)
+    
+    def _check_request_responses(self):
+        """Check for responses to sent chat requests."""
+        if not self.current_user or self.active_chat_session:
+            return
+        
+        try:
+            responses = self.firebase_manager.check_sent_requests_responses()
+            for response in responses:
+                target_uid = response.get('target_uid')
+                target_email = response.get('target_email')
+                chat_info = response.get('chat_info', {})
+                
+                # Start chat session with the user who accepted
+                peer_user = {'uid': target_uid, 'email': target_email}
+                self._start_chat_session(peer_user)
+                
+                # Connect to peer's network
+                peer_ip = chat_info.get('initiator_ip')
+                if peer_ip:
+                    # Connect to peer (this would normally be handled by network manager)
+                    print(f"Connecting to peer at {peer_ip}")
+                
+                break  # Handle one response at a time
+        except Exception as e:
+            print(f"Error checking request responses: {e}")
+    
+    def _start_response_monitoring(self):
+        """Start monitoring for chat request responses."""
+        self._check_request_responses()
+        # Check every 2 seconds for responses
+        self.root.after(2000, self._start_response_monitoring)
+    
+    def _check_request_responses(self):
+        """Check for responses to sent chat requests."""
+        if not self.current_user or self.active_chat_session:
+            return
+        
+        try:
+            responses = self.firebase_manager.check_sent_requests_responses()
+            for response in responses:
+                target_uid = response.get('target_uid')
+                target_email = response.get('target_email')
+                chat_info = response.get('chat_info', {})
+                
+                # Start chat session with the user who accepted
+                peer_user = {'uid': target_uid, 'email': target_email}
+                self._start_chat_session(peer_user)
+                
+                # Connect to peer's network
+                peer_ip = chat_info.get('initiator_ip')
+                if peer_ip:
+                    # Connect to peer (this would normally be handled by network manager)
+                    print(f"Connecting to peer at {peer_ip}")
+                
+                break  # Handle one response at a time
+        except Exception as e:
+            print(f"Error checking request responses: {e}")
     
     def _handle_chat_request(self, requests):
         """Handle incoming chat requests."""
