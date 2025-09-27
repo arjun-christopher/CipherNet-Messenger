@@ -71,6 +71,9 @@ class GUIManager:
         self.messages_frame = None
         self.message_entry = None
         self.chat_status_label = None
+        
+        # Cleanup management
+        self._cleanup_done_flag = [False]  # Use list for mutable reference
     
     def start_application(self):
         """Start the GUI application."""
@@ -1185,6 +1188,14 @@ class GUIManager:
         """Handle logout."""
         result = messagebox.askyesno("Logout", "Are you sure you want to logout?")
         if result:
+            # Comprehensive cleanup before logout
+            if self.current_user:
+                print("🧹 Performing cleanup before logout...")
+                comprehensive_cleanup(self.auth_manager, self.firebase_manager, silent=False)
+                # Mark cleanup as done to prevent duplicate in atexit
+                if hasattr(self, '_cleanup_done_flag'):
+                    self._cleanup_done_flag[0] = True
+            
             # End any active chat
             if self.active_chat_session:
                 self._end_chat_session()
@@ -1192,16 +1203,13 @@ class GUIManager:
             # Clear sessions
             self.active_sessions.clear()
             
-            # Stop network
-            if hasattr(self, 'network_manager'):
-                self.network_manager.stop_server()
-            
-            # Remove presence
-            if hasattr(self, 'firebase_manager'):
-                self.firebase_manager.remove_user_presence()
+            # Standard cleanup
+            self.firebase_manager.cleanup()
+            self.network_manager.stop_server()
             
             # Logout
             self.auth_manager.logout_user()
+            self.current_user = None
             self.show_login_screen()
     
     def _clear_current_frame(self):
@@ -1219,20 +1227,23 @@ class GUIManager:
     def _on_closing(self):
         """Handle application closing."""
         try:
+            # Comprehensive cleanup before exit
+            if self.current_user:
+                print("🧹 Performing cleanup before exit...")
+                comprehensive_cleanup(self.auth_manager, self.firebase_manager, silent=False)
+                # Mark cleanup as done to prevent duplicate in atexit
+                if hasattr(self, '_cleanup_done_flag'):
+                    self._cleanup_done_flag[0] = True
+            
             # End active chat
             if self.active_chat_session:
                 self._end_chat_session()
             
-            # Stop network
-            if hasattr(self, 'network_manager'):
+            # Standard cleanup
+            self.firebase_manager.cleanup()
+            
+            if self.network_manager:
                 self.network_manager.stop_server()
-            
-            # Remove presence
-            if hasattr(self, 'firebase_manager'):
-                self.firebase_manager.remove_user_presence()
-            
-            # Cleanup
-            comprehensive_cleanup()
             
         except Exception as e:
             print(f"Error during cleanup: {e}")
