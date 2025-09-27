@@ -1122,6 +1122,9 @@ class GUIManager:
         self._show_user_map()
         # Force immediate refresh of user map
         self.root.after(100, self._load_users_on_map)
+        
+        # Additional redirect ensuring both users see dashboard
+        self.root.after(300, self._ensure_dashboard_redirect)
     
     def _refresh_user_map(self):
         """Refresh the user map."""
@@ -1342,6 +1345,29 @@ class GUIManager:
         
         # End chat session without showing confirmation
         self._end_chat_session(show_confirmation=False)
+        
+        # Ensure redirection to dashboard after notification
+        self.root.after(200, self._ensure_dashboard_redirect)
+    
+    def _ensure_dashboard_redirect(self):
+        """Ensure user is redirected to dashboard/map view after chat termination."""
+        if self.current_view != "map":
+            # Force redirect to map view
+            self._show_user_map()
+        
+        # Force refresh of user map to show updated statuses
+        self.root.after(100, self._load_users_on_map)
+        
+        # Update status label if it exists
+        if hasattr(self, 'chat_status_label') and self.chat_status_label:
+            try:
+                self.chat_status_label.configure(
+                    text="No active chat",
+                    text_color=("#e3f2fd", "#a0a0a0")
+                )
+            except tk.TclError:
+                # Label might have been destroyed
+                pass
     
     def _handle_login(self):
         """Handle login."""
