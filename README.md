@@ -17,6 +17,7 @@ CipherNet Messenger is a secure, decentralized peer-to-peer messaging applicatio
 - **Data Integrity**: SHA-256 based integrity controls for all communications
 - **Private Peer Discovery**: Secure user discovery without exposing IP addresses
 - **Secure File Transfer**: Encrypted file sharing with integrity verification
+- **Single Session Enforcement**: Prevents concurrent logins for enhanced security
 - **Modern GUI**: Clean, intuitive interface built with CustomTkinter
 - **Desktop Notifications**: Cross-platform notification system
 - **Bidirectional Chat Requests**: Real-time request/response handling with automatic cleanup
@@ -168,19 +169,50 @@ User A ←→ Firebase (Auth/Signaling) ←→ User B
 3. File transmitted in encrypted 4096-byte chunks
 4. Receiver verifies file integrity using hash comparison
 
+### Session Management & Access Control
+
+CipherNet implements robust **Single Session Enforcement** for enhanced security:
+
+#### Session Policy
+- **One User, One Session**: A user can only be logged in on one system at a time
+- **One System, One User**: Only one user can be active per system/device simultaneously
+- **Automatic Session Management**: Sessions are automatically created, tracked, and cleaned up
+
+#### Session Features
+- **Unique Session IDs**: Each login creates a cryptographically unique session identifier
+- **Machine Fingerprinting**: Systems are identified using hostname and platform information
+- **Activity Tracking**: Session activity is monitored with automatic timeout (30 minutes)
+- **Conflict Detection**: Login attempts are blocked if session conflicts are detected
+- **Graceful Cleanup**: Sessions are properly cleaned up on logout and application exit
+
+#### Session Security Benefits
+- **Account Takeover Prevention**: Unauthorized concurrent access is impossible
+- **Resource Protection**: Prevents multiple instances depleting system resources
+- **Audit Trail**: All login attempts and session activities are tracked
+- **Consistency Guarantee**: Ensures single-user state consistency across the application
+
+#### Session Messages
+```
+Login blocked: User is already logged in on another system (Session: dc064fa5...)
+Login blocked: Another user (user2@gmail.com) is already logged in on this system
+```
+
 ### Security Guarantees
 
 #### Confidentiality
 - **Hybrid Encryption**: RSA for key exchange, Blowfish for data
 - **End-to-End Protection**: No plaintext data on intermediate servers
+- **Session Isolation**: Each session is cryptographically isolated from others
 
 #### Integrity
 - **Message Authentication**: HMAC-SHA256 prevents tampering
 - **File Verification**: SHA-256 hashing ensures file integrity
+- **Session Validation**: All session operations are authenticated and validated
 
 #### Availability
 - **Decentralized Architecture**: No single point of failure
 - **Direct P2P**: Independent of central server uptime
+- **Session Recovery**: Graceful handling of network interruptions and reconnection
 
 ## Project Structure
 

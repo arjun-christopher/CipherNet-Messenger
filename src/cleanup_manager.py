@@ -1,5 +1,30 @@
 """
-Cleanup module to remove stale data from Firebase on application exit.
+Cleanup module to remove stale data        stats = {
+            \"accepted_            print(f\"🎉 Cleanup complete! Processed {stats['total_cleaned']} items:\")
+            print(f\"  - Accepted requests: {stats['accepted_requests']}\")
+            print(f\"  - Stale pending requests: {stats['pending_requests']}\")
+            print(f\"  - Marked inactive chats: {stats['marked_inactive_chats']}\")
+            print(f\"  - Deleted inactive chats: {stats['deleted_inactive_chats']}\")
+            print(f\"  - Own presence: {stats['own_presence']}\")
+            print(f\"  - Session cleanup: {stats['session_cleanup']}\")ts\": 0,
+            \"pending_requests\": 0, 
+            \"marked_inactive_chats\": 0,
+            \"deleted_inactive_chats\": 0,
+            \"own_presence\": 0,
+            \"session_cleanup\": 0,
+            \"total_cleaned\": 0
+        }rebase on        # 5. Remove own presence from lobby (user is logging out)
+        if not silent:
+            print(\"  🗑️  Removing presence from lobby...\")
+        stats[\"own_presence\"] = _cleanup_own_presence(firebase_manager, current_uid, silent)
+        
+        # 6. Cleanup user session
+        if not silent:
+            print(\"  🔐 Cleaning up user session...\")
+        session_cleaned = auth_manager._cleanup_session() if hasattr(auth_manager, '_cleanup_session') else False
+        stats[\"session_cleanup\"] = 1 if session_cleaned else 0lication exit.
+
+Author: Arjun Christopher
 """
 
 import time
