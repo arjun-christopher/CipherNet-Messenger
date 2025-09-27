@@ -18,7 +18,6 @@ from network_manager import NetworkManager
 from firebase_manager import FirebaseManager
 from file_transfer_manager import FileTransferManager
 from notification_manager import NotificationManager
-from cleanup_manager import comprehensive_cleanup
 from cleanup_manager import comprehensive_cleanup, cleanup_user_chats_on_exit
 
 
@@ -577,7 +576,12 @@ class GUIManager:
                         # Switch to chat view
                         self._switch_view("chats")
                         
-                        # Show success notification
+                        # Show connecting message  
+                        self._add_system_message_integrated(peer_id, "🔄 Establishing connection...")
+                        
+                        # The requester should connect to us, but we can also try connecting
+                        # Note: In a real P2P system, usually the requester initiates the connection
+                        self._add_system_message_integrated(peer_id, "✅ Ready to receive messages")
                         self.notification_manager.notify_chat_started(from_email)
                         
                     except Exception as e:
@@ -668,17 +672,23 @@ class GUIManager:
                     # Connect to peer via network manager
                     peer_id = f"{target_ip}:{target_port}"
                     
-                    # Create integrated chat interface
+                    # Create integrated chat interface first
                     self._create_integrated_chat(peer_id, target_email)
-                    
-                    # Connect to the peer
-                    self.network_manager.connect_to_peer(target_ip, target_port, peer_id)
                     
                     # Switch to chat view
                     self._switch_view("chats")
                     
-                    # Show success notification
-                    self.notification_manager.notify_chat_started(target_email)
+                    # Show connecting message
+                    self._add_system_message_integrated(peer_id, "🔄 Connecting to peer...")
+                    
+                    # Try to connect to the peer with retry
+                    connection_success = self._connect_to_peer_with_retry(peer_id, target_ip, target_port, target_email)
+                    
+                    if connection_success:
+                        self._add_system_message_integrated(peer_id, "✅ Connected successfully!")
+                        self.notification_manager.notify_chat_started(target_email)
+                    else:
+                        self._add_system_message_integrated(peer_id, "❌ Connection failed. You can still send messages when peer comes online.")
                     
                 except Exception as e:
                     messagebox.showerror(
@@ -855,13 +865,23 @@ class GUIManager:
             anchor="w"
         ).pack(anchor="w", pady=(8, 0))
         
-        ctk.CTkLabel(
+        # Dynamic status label that can be updated
+        status_label = ctk.CTkLabel(
             info_frame,
-            text="🟢 Online • End-to-end encrypted",
+            text="� Connecting...",
             font=ctk.CTkFont(size=10),
             text_color=("#dcf8c6", "#a0a0a0"),
             anchor="w"
-        ).pack(anchor="w", pady=(0, 8))
+        )
+        status_label.pack(anchor="w", pady=(0, 8))
+        
+        # Store reference for updates
+        if hasattr(self, 'integrated_chat_widgets'):
+            # Extract peer_id from the parent context (this is a bit hacky, but works)
+            for pid, data in self.integrated_chat_widgets.items():
+                if data.get('peer_email') == peer_email:
+                    data['status_label'] = status_label
+                    break
     
     def _create_chat_input(self, parent, peer_id: str):
         """Create modern chat input area."""
@@ -934,15 +954,45 @@ class GUIManager:
                     'sender': self.current_user['email'] if self.current_user else 'Unknown'
                 }
                 
+                # Check if connected to peer
+                if not hasattr(self.network_manager, 'client_connections') or peer_id not in self.network_manager.client_connections:
+                    self._add_system_message_integrated(peer_id, "🔄 Not connected. Attempting to reconnect...")
+                    
+                    # Try to reconnect (extract IP and port from peer_id)
+                    try:
+                        ip_port = peer_id.split(':')
+                        if len(ip_port) == 2:
+                            target_ip = ip_port[0]
+                            target_port = int(ip_port[1])
+                            
+                            # Get peer email from chat data
+                            peer_email = "Unknown"
+                            if hasattr(self, 'integrated_chat_widgets') and peer_id in self.integrated_chat_widgets:
+                                peer_email = self.integrated_chat_widgets[peer_id].get('peer_email', 'Unknown')
+                            
+                            # Try quick reconnection (single attempt)
+                            success = self.network_manager.connect_to_peer(target_ip, target_port, peer_id)
+                            if not success:
+                                self._add_system_message_integrated(peer_id, "❌ Reconnection failed. Message queued for when peer comes online.")
+                                return
+                            else:
+                                self._add_system_message_integrated(peer_id, "✅ Reconnected successfully!")
+                    except ValueError:
+                        self._add_system_message_integrated(peer_id, "⚠️ Invalid peer ID format")
+                        return
+                
                 # Send to peer with correct parameters
                 success = self.network_manager.send_message(peer_id, 'text_message', message_content)
                 if not success:
-                    self._add_system_message_integrated(peer_id, "⚠️ Failed to send message - connection issue")
+                    self._add_system_message_integrated(peer_id, "⚠️ Failed to send message - peer may be offline")
             else:
                 self._add_system_message_integrated(peer_id, "⚠️ Network manager not available")
         except Exception as e:
             print(f"Error sending message: {e}")
-            self._add_system_message_integrated(peer_id, "⚠️ Message send failed")
+            if "10060" in str(e):
+                self._add_system_message_integrated(peer_id, "⚠️ Connection timeout - peer is unreachable")
+            else:
+                self._add_system_message_integrated(peer_id, f"⚠️ Message send failed: {str(e)}")
     
     def _add_message_integrated(self, peer_id: str, sender: str, message: str, is_own: bool = False):
         """Add message to integrated chat display."""
@@ -1028,6 +1078,43 @@ class GUIManager:
             text_color=("#718096", "#9ca3af")
         ).pack(padx=15, pady=6)
     
+    def _connect_to_peer_with_retry(self, peer_id: str, target_ip: str, target_port: int, target_email: str, max_retries: int = 3) -> bool:
+        """Try to connect to peer with retry mechanism."""
+        for attempt in range(max_retries):
+            try:
+                if attempt > 0:
+                    self._add_system_message_integrated(peer_id, f"🔄 Retry attempt {attempt + 1}/{max_retries}...")
+                
+                success = self.network_manager.connect_to_peer(target_ip, target_port, peer_id)
+                if success:
+                    self._update_connection_status(peer_id, "connected")
+                    return True
+                    
+                # Connection failed, show specific error message
+                if attempt == 0:
+                    self._add_system_message_integrated(peer_id, "⚠️ Initial connection failed - peer may be offline")
+                
+            except Exception as e:
+                print(f"Connection attempt {attempt + 1} failed: {e}")
+                error_msg = str(e)
+                if "10060" in error_msg:
+                    self._add_system_message_integrated(peer_id, "⚠️ Connection timeout - peer is unreachable")
+                elif "10061" in error_msg:
+                    self._add_system_message_integrated(peer_id, "⚠️ Connection refused - peer's server not running")
+                else:
+                    self._add_system_message_integrated(peer_id, f"⚠️ Connection error: {error_msg}")
+            
+            # Wait before retry (except on last attempt)
+            if attempt < max_retries - 1:
+                import time
+                time.sleep(2)
+        
+        # All attempts failed
+        self._add_system_message_integrated(peer_id, f"❌ Failed to connect after {max_retries} attempts")
+        self._add_system_message_integrated(peer_id, "💡 Tip: Ask peer to check their internet connection and firewall")
+        self._update_connection_status(peer_id, "failed")
+        return False
+    
     def _handle_integrated_text_message(self, message: Dict[str, Any], peer_id: str):
         """Handle incoming text message for integrated chat."""
         try:
@@ -1053,8 +1140,33 @@ class GUIManager:
             # Add system message about key exchange
             if hasattr(self, 'integrated_chat_widgets') and peer_id in self.integrated_chat_widgets:
                 self._add_system_message_integrated(peer_id, "🔐 Encryption keys exchanged successfully")
+                self._update_connection_status(peer_id, "connected")
         except Exception as e:
             print(f"Error handling integrated session key: {e}")
+    
+    def _update_connection_status(self, peer_id: str, status: str):
+        """Update the connection status indicator in chat header."""
+        if not hasattr(self, 'integrated_chat_widgets') or peer_id not in self.integrated_chat_widgets:
+            return
+        
+        chat_data = self.integrated_chat_widgets[peer_id]
+        status_label = chat_data.get('status_label')
+        if not status_label:
+            return
+        
+        try:
+            if status == "connecting":
+                status_label.configure(text="🔄 Connecting...")
+            elif status == "connected":
+                status_label.configure(text="🟢 Connected • End-to-end encrypted")
+            elif status == "disconnected":
+                status_label.configure(text="🔴 Disconnected")
+            elif status == "failed":
+                status_label.configure(text="⚠️ Connection failed")
+            else:
+                status_label.configure(text="❓ Unknown status")
+        except Exception as e:
+            print(f"Error updating connection status: {e}")
 
 
 class ChatWindow:
