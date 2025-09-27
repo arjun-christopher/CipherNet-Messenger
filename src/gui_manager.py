@@ -654,8 +654,21 @@ class GUIManager:
             
             if not peer_public_key:
                 print(f"❌ No public key available for {peer_email}")
-                self._show_session_error("No public key available for secure communication")
-                return
+                # Try to refresh online users and get the public key
+                print(f"🔄 Attempting to refresh user list and find public key for {peer_email}")
+                online_users = self.firebase_manager.get_online_users()
+                for user in online_users:
+                    if user.get('uid') == peer_uid or user.get('email') == peer_email:
+                        peer_public_key = user.get('public_key', '')
+                        if peer_public_key:
+                            print(f"✅ Found public key for {peer_email} after refresh")
+                            # Update the peer_user object with the found public key
+                            self.active_chat_session['public_key'] = peer_public_key
+                            break
+                
+                if not peer_public_key:
+                    self._show_session_error("No public key available for secure communication")
+                    return
             
             # Validate and parse peer's public key
             try:
@@ -848,6 +861,35 @@ class GUIManager:
         # Input area
         self._create_input_area(chat_container)
     
+    def _get_user_with_public_key(self, uid: str, email: str = None) -> dict:
+        """
+        Get user information including public key from online users.
+        
+        Args:
+            uid: User's UID
+            email: User's email (optional, for fallback)
+        
+        Returns:
+            User dictionary with public key or fallback dict
+        """
+        try:
+            online_users = self.firebase_manager.get_online_users()
+            for user in online_users:
+                if user.get('uid') == uid:
+                    return user
+            
+            # Fallback if not found
+            fallback_user = {'uid': uid, 'public_key': ''}
+            if email:
+                fallback_user['email'] = email
+            
+            print(f"⚠️ Warning: Could not find public key for user {uid} ({email}) in online users")
+            return fallback_user
+            
+        except Exception as e:
+            print(f"❌ Error getting user with public key: {e}")
+            return {'uid': uid, 'email': email or 'Unknown', 'public_key': ''}
+
     def _add_system_message(self, message: str):
         """
         Add system message to chat (for security notifications).
@@ -1500,8 +1542,10 @@ class GUIManager:
                 target_email = response.get('target_email')
                 chat_info = response.get('chat_info', {})
                 
-                # Start chat session with the user who accepted
-                peer_user = {'uid': target_uid, 'email': target_email}
+                # Get peer's full info including public key
+                peer_user = self._get_user_with_public_key(target_uid, target_email)
+                
+                # Start chat session with full user info
                 self._start_chat_session(peer_user)
                 
                 # Connect to peer's network
@@ -1514,69 +1558,7 @@ class GUIManager:
         except Exception as e:
             print(f"Error checking request responses: {e}")
     
-    def _start_response_monitoring(self):
-        """Start monitoring for chat request responses."""
-        self._check_request_responses()
-        # Check every 5 seconds for responses
-        self.root.after(5000, self._start_response_monitoring)
 
-    def _check_request_responses(self):
-        """Check for responses to sent chat requests."""
-        if not self.current_user or self.active_chat_session:
-            return
-        
-        try:
-            responses = self.firebase_manager.check_sent_requests_responses()
-            for response in responses:
-                target_uid = response.get('target_uid')
-                target_email = response.get('target_email')
-                chat_info = response.get('chat_info', {})
-                
-                # Start chat session with the user who accepted
-                peer_user = {'uid': target_uid, 'email': target_email}
-                self._start_chat_session(peer_user)
-                
-                # Connect to peer's network
-                peer_ip = chat_info.get('initiator_ip')
-                if peer_ip:
-                    # Connect to peer (this would normally be handled by network manager)
-                    print(f"Connecting to peer at {peer_ip}")
-                
-                break  # Handle one response at a time
-        except Exception as e:
-            print(f"Error checking request responses: {e}")
-    
-    def _start_response_monitoring(self):
-        """Start monitoring for chat request responses."""
-        self._check_request_responses()
-        # Check every 5 seconds for responses
-        self.root.after(5000, self._start_response_monitoring)
-
-    def _check_request_responses(self):
-        """Check for responses to sent chat requests."""
-        if not self.current_user or self.active_chat_session:
-            return
-        
-        try:
-            responses = self.firebase_manager.check_sent_requests_responses()
-            for response in responses:
-                target_uid = response.get('target_uid')
-                target_email = response.get('target_email')
-                chat_info = response.get('chat_info', {})
-                
-                # Start chat session with the user who accepted
-                peer_user = {'uid': target_uid, 'email': target_email}
-                self._start_chat_session(peer_user)
-                
-                # Connect to peer's network
-                peer_ip = chat_info.get('initiator_ip')
-                if peer_ip:
-                    # Connect to peer (this would normally be handled by network manager)
-                    print(f"Connecting to peer at {peer_ip}")
-                
-                break  # Handle one response at a time
-        except Exception as e:
-            print(f"Error checking request responses: {e}")
     
     def _handle_chat_request(self, requests):
         """Handle incoming chat requests."""
@@ -1621,8 +1603,10 @@ class GUIManager:
                     local_ip, local_port = self.network_manager.get_local_address()
                     self.firebase_manager.respond_to_chat_request(from_uid, request_id, True, local_ip)
                     
-                    # Start chat
-                    peer_user = {'uid': from_uid, 'email': from_email}
+                    # Get peer's full info including public key
+                    peer_user = self._get_user_with_public_key(from_uid, from_email)
+                    
+                    # Start chat with full peer information
                     self._start_chat_session(peer_user)
                 else:
                     # Decline
