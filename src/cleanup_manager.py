@@ -1,28 +1,13 @@
 """
-Cleanup module to remove stale data        stats = {
-            \"accepted_            print(f\"🎉 Cleanup complete! Processed {stats['total_cleaned']} items:\")
-            print(f\"  - Accepted requests: {stats['accepted_requests']}\")
-            print(f\"  - Stale pending requests: {stats['pending_requests']}\")
-            print(f\"  - Marked inactive chats: {stats['marked_inactive_chats']}\")
-            print(f\"  - Deleted inactive chats: {stats['deleted_inactive_chats']}\")
-            print(f\"  - Own presence: {stats['own_presence']}\")
-            print(f\"  - Session cleanup: {stats['session_cleanup']}\")ts\": 0,
+Cleanup module to remove s        stats = {
+            \"accepted_requests\": 0,
             \"pending_requests\": 0, 
             \"marked_inactive_chats\": 0,
             \"deleted_inactive_chats\": 0,
             \"own_presence\": 0,
             \"session_cleanup\": 0,
             \"total_cleaned\": 0
-        }rebase on        # 5. Remove own presence from lobby (user is logging out)
-        if not silent:
-            print(\"  🗑️  Removing presence from lobby...\")
-        stats[\"own_presence\"] = _cleanup_own_presence(firebase_manager, current_uid, silent)
-        
-        # 6. Cleanup user session
-        if not silent:
-            print(\"  🔐 Cleaning up user session...\")
-        session_cleaned = auth_manager._cleanup_session() if hasattr(auth_manager, '_cleanup_session') else False
-        stats[\"session_cleanup\"] = 1 if session_cleaned else 0lication exit.
+        }a
 
 Author: Arjun Christopher
 """
@@ -83,15 +68,22 @@ def comprehensive_cleanup(auth_manager, firebase_manager, silent=True):
             print("  🗑️  Removing presence from lobby...")
         stats["own_presence"] = _cleanup_own_presence(firebase_manager, current_uid, silent)
         
+        # 6. INSTANT session cleanup - no delays
+        if not silent:
+            print("  🔐 INSTANTLY cleaning up user session...")
+        session_cleaned = auth_manager._cleanup_session() if hasattr(auth_manager, '_cleanup_session') else False
+        stats["session_cleanup"] = 1 if session_cleaned else 0
+        
         stats["total_cleaned"] = sum(stats.values()) - stats["total_cleaned"]  # Exclude self-reference
         
         if not silent:
-            print(f"🎉 Cleanup complete! Processed {stats['total_cleaned']} items:")
+            print(f"🎉 INSTANT Cleanup complete! Processed {stats['total_cleaned']} items:")
             print(f"  - Accepted requests: {stats['accepted_requests']}")
             print(f"  - Stale pending requests: {stats['pending_requests']}")
             print(f"  - Marked inactive chats: {stats['marked_inactive_chats']}")
             print(f"  - Deleted inactive chats: {stats['deleted_inactive_chats']}")
             print(f"  - Own presence: {stats['own_presence']}")
+            print(f"  - Session cleanup: {stats['session_cleanup']}")
         
         return stats
         
@@ -201,14 +193,11 @@ def _mark_user_chats_inactive(firebase_manager, current_uid, silent):
 
 
 def _cleanup_inactive_chats(firebase_manager, current_uid, silent):
-    """Clean up chat sessions that are marked as inactive."""
+    """Clean up chat sessions that are marked as inactive - INSTANT DELETION."""
     cleaned_count = 0
     try:
-        current_time = int(time.time() * 1000)
-        grace_period = 30 * 1000  # 30 seconds grace period (reduced for immediate cleanup)
-        
         if not silent:
-            print(f"    🔍 Looking for inactive chats (grace period: {grace_period/1000}s)")
+            print(f"    🔍 Looking for inactive chats (INSTANT DELETION)")
         
         # Read all chats
         chats_data = firebase_manager._read_data("chats")
@@ -221,26 +210,20 @@ def _cleanup_inactive_chats(firebase_manager, current_uid, silent):
                 if isinstance(chat_data, dict):
                     participants = chat_data.get('participants', {})
                     status = chat_data.get('status', 'active')
-                    last_activity = chat_data.get('last_activity', 0)
                     
                     if not silent:
-                        print(f"    💬 Chat {chat_id}: status={status}, last_activity={last_activity}")
+                        print(f"    💬 Chat {chat_id}: status={status}")
                     
-                    # Delete chats that are inactive and have had time to be properly marked
+                    # Delete ALL inactive chats immediately - no waiting time
                     if status == 'inactive':
-                        time_since_inactive = current_time - last_activity
-                        if time_since_inactive > grace_period:
-                            chat_path = f"chats/{chat_id}"
-                            if firebase_manager._delete_data(chat_path):
-                                cleaned_count += 1
-                                if not silent:
-                                    print(f"    ✅ Deleted inactive chat: {chat_id}")
-                            else:
-                                if not silent:
-                                    print(f"    ❌ Failed to delete chat: {chat_id}")
+                        chat_path = f"chats/{chat_id}"
+                        if firebase_manager._delete_data(chat_path):
+                            cleaned_count += 1
+                            if not silent:
+                                print(f"    ✅ INSTANTLY deleted inactive chat: {chat_id}")
                         else:
                             if not silent:
-                                print(f"    ⏳ Chat {chat_id} inactive but within grace period ({time_since_inactive/1000}s < {grace_period/1000}s)")
+                                print(f"    ❌ Failed to delete chat: {chat_id}")
                     elif not silent:
                         print(f"    ⏭️  Chat {chat_id} is {status}, skipping")
         else:
@@ -273,8 +256,8 @@ def _cleanup_own_presence(firebase_manager, current_uid, silent):
 
 def cleanup_user_chats_on_exit(firebase_manager, current_uid, silent=True):
     """
-    Clean up user's chats when they exit the application.
-    Marks active chats as inactive and deletes them immediately.
+    INSTANTLY clean up user's chats when they exit the application.
+    Marks active chats as inactive and deletes them with NO waiting time.
     
     Args:
         firebase_manager: FirebaseManager instance
@@ -286,7 +269,7 @@ def cleanup_user_chats_on_exit(firebase_manager, current_uid, silent=True):
     """
     try:
         if not silent:
-            print("🧹 Processing user's chats on exit...")
+            print("🧹 INSTANTLY processing user's chats on exit...")
         
         stats = {
             "marked_inactive": 0,
@@ -296,18 +279,18 @@ def cleanup_user_chats_on_exit(firebase_manager, current_uid, silent=True):
         
         # Step 1: Mark user's active chats as inactive
         if not silent:
-            print("  🔄 Marking active chats as inactive...")
+            print("  🔄 INSTANTLY marking active chats as inactive...")
         stats["marked_inactive"] = _mark_user_chats_inactive(firebase_manager, current_uid, silent)
         
-        # Step 2: Delete the inactive chats immediately  
+        # Step 2: Delete the inactive chats IMMEDIATELY - no grace period  
         if not silent:
-            print("  🗑️ Deleting inactive chats...")
+            print("  🗑️ INSTANTLY deleting inactive chats...")
         stats["deleted_chats"] = _cleanup_inactive_chats(firebase_manager, current_uid, silent)
         
         stats["total_processed"] = stats["marked_inactive"] + stats["deleted_chats"]
         
         if not silent:
-            print(f"✅ Chat cleanup complete: {stats['marked_inactive']} marked inactive, {stats['deleted_chats']} deleted")
+            print(f"⚡ INSTANT chat cleanup complete: {stats['marked_inactive']} marked inactive, {stats['deleted_chats']} deleted")
         
         return stats
         
