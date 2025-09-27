@@ -180,31 +180,53 @@ def _cleanup_inactive_chats(firebase_manager, current_uid, silent):
     cleaned_count = 0
     try:
         current_time = int(time.time() * 1000)
-        grace_period = 5 * 60 * 1000  # 5 minutes grace period to ensure marking completed
+        grace_period = 30 * 1000  # 30 seconds grace period (reduced for immediate cleanup)
+        
+        if not silent:
+            print(f"    🔍 Looking for inactive chats (grace period: {grace_period/1000}s)")
         
         # Read all chats
         chats_data = firebase_manager._read_data("chats")
         
         if chats_data:
+            if not silent:
+                print(f"    📊 Found {len(chats_data)} total chats in database")
+            
             for chat_id, chat_data in chats_data.items():
                 if isinstance(chat_data, dict):
                     participants = chat_data.get('participants', {})
                     status = chat_data.get('status', 'active')
                     last_activity = chat_data.get('last_activity', 0)
                     
+                    if not silent:
+                        print(f"    💬 Chat {chat_id}: status={status}, last_activity={last_activity}")
+                    
                     # Delete chats that are inactive and have had time to be properly marked
-                    if (status == 'inactive' and 
-                        current_time - last_activity > grace_period):
-                        
-                        chat_path = f"chats/{chat_id}"
-                        if firebase_manager._delete_data(chat_path):
-                            cleaned_count += 1
+                    if status == 'inactive':
+                        time_since_inactive = current_time - last_activity
+                        if time_since_inactive > grace_period:
+                            chat_path = f"chats/{chat_id}"
+                            if firebase_manager._delete_data(chat_path):
+                                cleaned_count += 1
+                                if not silent:
+                                    print(f"    ✅ Deleted inactive chat: {chat_id}")
+                            else:
+                                if not silent:
+                                    print(f"    ❌ Failed to delete chat: {chat_id}")
+                        else:
                             if not silent:
-                                print(f"    ✅ Deleted inactive chat: {chat_id}")
+                                print(f"    ⏳ Chat {chat_id} inactive but within grace period ({time_since_inactive/1000}s < {grace_period/1000}s)")
+                    elif not silent:
+                        print(f"    ⏭️  Chat {chat_id} is {status}, skipping")
+        else:
+            if not silent:
+                print(f"    📭 No chats found in database")
     
     except Exception as e:
         if not silent:
             print(f"    ❌ Error cleaning inactive chats: {e}")
+            import traceback
+            traceback.print_exc()
     
     return cleaned_count
 
