@@ -18,11 +18,11 @@ class NetworkManager:
     
     def __init__(self, config, crypto_manager):
         """
-        Initialize network manager.
+        Initialize network manager with enhanced security features.
         
         Args:
             config: Configuration manager instance
-            crypto_manager: Cryptography manager instance
+            crypto_manager: Enhanced cryptography manager instance
         """
         self.config = config
         self.crypto_manager = crypto_manager
@@ -35,9 +35,19 @@ class NetworkManager:
         self.port = config.get('network.default_port', 8888)
         self.connection_closed_callback = None  # Callback for connection closures
         
+        # Enhanced session management
+        self.peer_sessions = {}  # {peer_id: session_info}
+        self.handshake_timeouts = {}  # {peer_id: timeout_timestamp}
+        self.session_establishment_callbacks = {}  # {peer_id: callback}
+        
         # Threading
         self.server_thread = None
         self.connection_threads = {}
+        
+        # Register enhanced message handlers
+        self.register_message_handler('secure_handshake', self._handle_secure_handshake)
+        self.register_message_handler('key_exchange', self._handle_key_exchange)
+        self.register_message_handler('session_established', self._handle_session_established)
     
     def start_server(self) -> bool:
         """
@@ -185,36 +195,73 @@ class NetworkManager:
             print(f"Failed to send message to {peer_id}: {e}")
             return False
     
-    def send_session_key(self, peer_id: str, session_key: bytes, public_key_pem: bytes) -> bool:
+    def initiate_secure_session(self, peer_id: str, peer_public_key_pem: bytes, 
+                               callback: Callable = None) -> bool:
         """
-        Send encrypted session key to peer.
+        Initiate secure session establishment with RSA-2048 key exchange.
         
         Args:
             peer_id: Target peer identifier
-            session_key: Session key to send
-            public_key_pem: Peer's public key
+            peer_public_key_pem: Peer's RSA-2048 public key in PEM format
+            callback: Optional callback for session establishment completion
         
         Returns:
-            True if session key sent successfully, False otherwise
+            True if session initiation started successfully, False otherwise
         """
         try:
-            encrypted_key = self.crypto_manager.encrypt_session_key(session_key, public_key_pem)
+            print(f"🔒 Initiating secure session with peer {peer_id}")
             
-            key_message = {
-                "type": "session_key",
-                "encrypted_key": encrypted_key.hex(),
-                "timestamp": datetime.now().isoformat(),
-                "sender": self._get_own_peer_id()
+            # Validate peer's public key
+            if not self.crypto_manager.validate_peer_public_key(peer_public_key_pem):
+                print(f"❌ Invalid public key from peer {peer_id}")
+                return False
+            
+            # Generate session key for this peer
+            session_key = self.crypto_manager.generate_session_key(peer_id)
+            
+            # Encrypt session key with peer's public key using PKCS#1 OAEP
+            key_exchange_data = self.crypto_manager.encrypt_session_key(
+                session_key, peer_public_key_pem, peer_id
+            )
+            
+            # Create secure key exchange message
+            key_exchange_message = {
+                "type": "key_exchange",
+                "protocol_version": "1.0",
+                "key_exchange_data": key_exchange_data,
+                "sender_id": self._get_own_peer_id(),
+                "handshake_data": self.crypto_manager.create_secure_handshake_data(peer_id),
+                "timestamp": datetime.now().isoformat()
             }
             
+            # Store session establishment callback
+            if callback:
+                self.session_establishment_callbacks[peer_id] = callback
+            
+            # Send key exchange message
             if peer_id in self.client_connections:
                 conn = self.client_connections[peer_id]
-                return self._send_raw_message(conn, json.dumps(key_message))
-            
-            return False
+                success = self._send_raw_message(conn, json.dumps(key_exchange_message))
+                
+                if success:
+                    # Update session state
+                    self.peer_sessions[peer_id] = {
+                        'status': 'key_exchange_sent',
+                        'initiated_at': time.time(),
+                        'session_key': session_key,
+                        'protocol_version': '1.0'
+                    }
+                    print(f"✅ Key exchange initiated with peer {peer_id}")
+                    return True
+                else:
+                    print(f"❌ Failed to send key exchange to peer {peer_id}")
+                    return False
+            else:
+                print(f"❌ No connection to peer {peer_id}")
+                return False
             
         except Exception as e:
-            print(f"Failed to send session key to {peer_id}: {e}")
+            print(f"❌ Failed to initiate secure session with {peer_id}: {e}")
             return False
     
     def register_message_handler(self, message_type: str, handler: Callable):
@@ -227,6 +274,41 @@ class NetworkManager:
         """
         self.message_handlers[message_type] = handler
     
+    def send_secure_handshake(self, peer_id: str) -> bool:
+        """
+        Send secure handshake to establish session parameters.
+        
+        Args:
+            peer_id: Target peer identifier
+        
+        Returns:
+            True if handshake sent successfully, False otherwise
+        """
+        try:
+            handshake_data = self.crypto_manager.create_secure_handshake_data(peer_id)
+            
+            handshake_message = {
+                "type": "secure_handshake",
+                "handshake_data": handshake_data,
+                "sender_id": self._get_own_peer_id(),
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            if peer_id in self.client_connections:
+                conn = self.client_connections[peer_id]
+                success = self._send_raw_message(conn, json.dumps(handshake_message))
+                
+                if success:
+                    self.handshake_timeouts[peer_id] = time.time() + 30  # 30 second timeout
+                    print(f"✅ Secure handshake sent to peer {peer_id}")
+                    return True
+                    
+            return False
+            
+        except Exception as e:
+            print(f"❌ Failed to send secure handshake to {peer_id}: {e}")
+            return False
+    
     def register_connection_closed_callback(self, callback: Callable):
         """
         Register a callback for when connections are closed.
@@ -235,6 +317,16 @@ class NetworkManager:
             callback: Function to call when connection is closed (receives peer_id)
         """
         self.connection_closed_callback = callback
+    
+    def register_session_establishment_callback(self, peer_id: str, callback: Callable):
+        """
+        Register a callback for session establishment completion.
+        
+        Args:
+            peer_id: Peer identifier
+            callback: Function to call when session is established
+        """
+        self.session_establishment_callbacks[peer_id] = callback
     
     def get_local_address(self) -> Tuple[str, int]:
         """
@@ -253,6 +345,31 @@ class NetworkManager:
             List of connected peer identifiers
         """
         return list(self.client_connections.keys())
+    
+    def is_session_established(self, peer_id: str) -> bool:
+        """
+        Check if secure session is established with peer.
+        
+        Args:
+            peer_id: Peer identifier
+        
+        Returns:
+            True if session is established, False otherwise
+        """
+        session_info = self.peer_sessions.get(peer_id, {})
+        return session_info.get('status') == 'established'
+    
+    def get_session_info(self, peer_id: str) -> dict:
+        """
+        Get session information for peer.
+        
+        Args:
+            peer_id: Peer identifier
+        
+        Returns:
+            Session information dictionary
+        """
+        return self.peer_sessions.get(peer_id, {})
     
     def _accept_connections(self):
         """Accept incoming connections (runs in separate thread)."""
@@ -496,6 +613,163 @@ class NetworkManager:
         except:
             return "127.0.0.1"
     
+    def _handle_secure_handshake(self, message: Dict[str, Any], peer_id: str):
+        """
+        Handle secure handshake message for session initiation.
+        
+        Args:
+            message: Handshake message
+            peer_id: Sender peer identifier
+        """
+        try:
+            print(f"🔒 Received secure handshake from peer {peer_id}")
+            
+            handshake_data = message.get('handshake_data', {})
+            
+            # Validate protocol version
+            protocol_version = handshake_data.get('protocol_version', '1.0')
+            if protocol_version != '1.0':
+                print(f"❌ Unsupported protocol version: {protocol_version}")
+                return
+            
+            # Validate encryption algorithms
+            encryption_algos = handshake_data.get('encryption_algorithms', [])
+            if 'RSA-2048-OAEP-SHA256' not in encryption_algos:
+                print(f"❌ Unsupported encryption algorithms: {encryption_algos}")
+                return
+            
+            # Extract and validate peer's public key
+            peer_public_key_b64 = handshake_data.get('public_key', '')
+            if not peer_public_key_b64:
+                print(f"❌ No public key in handshake from {peer_id}")
+                return
+            
+            try:
+                import base64
+                peer_public_key_pem = base64.b64decode(peer_public_key_b64)
+                
+                # Validate peer's public key
+                expected_fingerprint = handshake_data.get('key_fingerprint')
+                if not self.crypto_manager.validate_peer_public_key(peer_public_key_pem, expected_fingerprint):
+                    print(f"❌ Invalid public key from peer {peer_id}")
+                    return
+                
+                # Respond with our own key exchange
+                self.initiate_secure_session(peer_id, peer_public_key_pem)
+                
+                print(f"✅ Processed secure handshake from peer {peer_id}")
+                
+            except Exception as e:
+                print(f"❌ Failed to process public key from {peer_id}: {e}")
+                
+        except Exception as e:
+            print(f"❌ Error handling secure handshake from {peer_id}: {e}")
+    
+    def _handle_key_exchange(self, message: Dict[str, Any], peer_id: str):
+        """
+        Handle key exchange message for session establishment.
+        
+        Args:
+            message: Key exchange message
+            peer_id: Sender peer identifier
+        """
+        try:
+            print(f"🔑 Received key exchange from peer {peer_id}")
+            
+            key_exchange_data = message.get('key_exchange_data', {})
+            
+            # Decrypt the session key using our private key
+            session_key = self.crypto_manager.decrypt_session_key(key_exchange_data, peer_id)
+            
+            if session_key:
+                # Update session state
+                self.peer_sessions[peer_id] = {
+                    'status': 'established',
+                    'established_at': time.time(),
+                    'session_key': session_key,
+                    'protocol_version': message.get('protocol_version', '1.0')
+                }
+                
+                # Send session establishment confirmation
+                confirmation_message = {
+                    "type": "session_established",
+                    "status": "confirmed",
+                    "session_id": f"{self._get_own_peer_id()}_{peer_id}_{int(time.time())}",
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+                if peer_id in self.client_connections:
+                    conn = self.client_connections[peer_id]
+                    self._send_raw_message(conn, json.dumps(confirmation_message))
+                
+                # Call session establishment callback if registered
+                if peer_id in self.session_establishment_callbacks:
+                    callback = self.session_establishment_callbacks[peer_id]
+                    callback(peer_id, True, "Session established successfully")
+                    del self.session_establishment_callbacks[peer_id]
+                
+                print(f"✅ Secure session established with peer {peer_id}")
+            else:
+                print(f"❌ Failed to decrypt session key from peer {peer_id}")
+                
+        except Exception as e:
+            print(f"❌ Error handling key exchange from {peer_id}: {e}")
+    
+    def _handle_session_established(self, message: Dict[str, Any], peer_id: str):
+        """
+        Handle session established confirmation message.
+        
+        Args:
+            message: Session established message
+            peer_id: Sender peer identifier
+        """
+        try:
+            print(f"✅ Session establishment confirmed by peer {peer_id}")
+            
+            status = message.get('status')
+            if status == 'confirmed':
+                # Update our session state
+                if peer_id in self.peer_sessions:
+                    self.peer_sessions[peer_id]['status'] = 'established'
+                    self.peer_sessions[peer_id]['confirmed_at'] = time.time()
+                
+                # Call session establishment callback if registered
+                if peer_id in self.session_establishment_callbacks:
+                    callback = self.session_establishment_callbacks[peer_id]
+                    callback(peer_id, True, "Session confirmed by peer")
+                    del self.session_establishment_callbacks[peer_id]
+                
+                print(f"🔐 Secure session fully established with peer {peer_id}")
+                
+        except Exception as e:
+            print(f"❌ Error handling session establishment from {peer_id}: {e}")
+    
+    def cleanup_session_data(self, peer_id: str = None):
+        """
+        Clean up session data for specific peer or all peers.
+        
+        Args:
+            peer_id: Peer to clean up, or None for all peers
+        """
+        try:
+            if peer_id:
+                # Clean up specific peer
+                self.peer_sessions.pop(peer_id, None)
+                self.handshake_timeouts.pop(peer_id, None)  
+                self.session_establishment_callbacks.pop(peer_id, None)
+                self.crypto_manager.clear_session_data(peer_id)
+                print(f"🧹 Cleaned up session data for peer {peer_id}")
+            else:
+                # Clean up all sessions
+                self.peer_sessions.clear()
+                self.handshake_timeouts.clear()
+                self.session_establishment_callbacks.clear()
+                self.crypto_manager.clear_session_data()
+                print("🧹 Cleaned up all session data")
+                
+        except Exception as e:
+            print(f"Error cleaning up session data: {e}")
+
     def _get_own_peer_id(self) -> str:
         """
         Get own peer identifier.

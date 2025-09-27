@@ -597,37 +597,232 @@ class GUIManager:
             messagebox.showerror("Error", f"Failed to send chat request: {str(e)}")
     
     def _start_chat_session(self, peer_user):
-        """Start a chat session with a peer."""
+        """Start a secure chat session with enhanced RSA-2048 session initiation."""
         if self.active_chat_session:
             return
         
-        # Set active session
-        self.active_chat_session = peer_user
+        try:
+            print(f"🔐 Starting secure chat session with {peer_user.get('email', 'Unknown')}")
+            
+            # Update header to show connecting status
+            self.chat_status_label.configure(
+                text=f"🔒 Establishing secure session with {peer_user.get('email', 'Unknown')}...",
+                text_color=("#ff9800", "#ff9800")
+            )
+            
+            # Set active session
+            self.active_chat_session = peer_user
+            
+            # Update session tracking
+            current_uid = self.current_user.get('uid', '') if self.current_user else ''
+            peer_uid = peer_user.get('uid', '')
+            session_key = f"{current_uid}-{peer_uid}"
+            self.active_sessions[session_key] = True
+            
+            # Create chat ID for Firebase monitoring
+            chat_id = f"chat_{min(current_uid, peer_uid)}_{max(current_uid, peer_uid)}"
+            self.active_chat_session['chat_id'] = chat_id
+            
+            # Set up chat monitoring for peer status changes
+            self.firebase_manager.listen_for_chat_updates(chat_id, self._handle_chat_updates)
+            
+            # Update participant status to online
+            self.firebase_manager.update_chat_participant_status(chat_id, 'online')
+            
+            # Show chat interface immediately (connection will be established in background)
+            self._show_chat_interface()
+            
+            # Start secure session establishment process
+            self._establish_secure_session(peer_user)
+            
+        except Exception as e:
+            print(f"❌ Failed to start chat session: {e}")
+            messagebox.showerror("Error", "Failed to start secure chat session")
+            self._end_chat_session()
+    
+    def _establish_secure_session(self, peer_user):
+        """
+        Establish secure session using RSA-2048 key exchange with PKCS#1 OAEP.
         
-        # Update session tracking
-        current_uid = self.current_user.get('uid', '') if self.current_user else ''
-        peer_uid = peer_user.get('uid', '')
-        session_key = f"{current_uid}-{peer_uid}"
-        self.active_sessions[session_key] = True
+        Args:
+            peer_user: Peer user information
+        """
+        try:
+            peer_uid = peer_user.get('uid', '')
+            peer_email = peer_user.get('email', 'Unknown')
+            peer_public_key = peer_user.get('public_key', '')
+            
+            if not peer_public_key:
+                print(f"❌ No public key available for {peer_email}")
+                self._show_session_error("No public key available for secure communication")
+                return
+            
+            # Validate and parse peer's public key
+            try:
+                peer_public_key_pem = peer_public_key.encode('utf-8')
+                
+                # Validate peer's RSA-2048 public key
+                if not self.crypto_manager.validate_peer_public_key(peer_public_key_pem):
+                    print(f"❌ Invalid public key from {peer_email}")
+                    self._show_session_error("Invalid public key - session cannot be established")
+                    return
+                
+                print(f"✅ Public key validated for {peer_email}")
+                
+                # Get connection info from Firebase
+                chat_id = self.active_chat_session.get('chat_id', '')
+                chat_info = self.firebase_manager.get_chat_connection_info(chat_id)
+                
+                if not chat_info:
+                    print(f"❌ No connection info available for chat {chat_id}")
+                    self._show_session_error("Connection information not available")
+                    return
+                
+                # Extract peer's IP and port
+                participants = chat_info.get('participants', {})
+                peer_info = participants.get(peer_uid, {})
+                peer_ip = peer_info.get('ip', '')
+                peer_port = peer_info.get('port', 8888)
+                
+                if not peer_ip:
+                    print(f"❌ No IP address available for {peer_email}")
+                    self._show_session_error("Peer IP address not available")
+                    return
+                
+                print(f"🌐 Connecting to {peer_email} at {peer_ip}:{peer_port}")
+                
+                # Connect to peer
+                if not self.network_manager.connect_to_peer(peer_ip, peer_port, peer_uid):
+                    print(f"❌ Failed to connect to {peer_email}")
+                    self._show_session_error("Failed to establish network connection")
+                    return
+                
+                # Register session establishment callback
+                self.network_manager.register_session_establishment_callback(
+                    peer_uid, self._on_session_established
+                )
+                
+                # Initiate secure session with RSA-2048 key exchange
+                if self.network_manager.initiate_secure_session(peer_uid, peer_public_key_pem, 
+                                                               self._on_session_established):
+                    print(f"🔑 RSA-2048 key exchange initiated with {peer_email}")
+                    
+                    # Update status to show key exchange in progress
+                    self.chat_status_label.configure(
+                        text=f"🔑 Exchanging keys with {peer_email}...",
+                        text_color=("#ff9800", "#ff9800")
+                    )
+                else:
+                    print(f"❌ Failed to initiate key exchange with {peer_email}")
+                    self._show_session_error("Failed to initiate secure key exchange")
+                    
+            except Exception as e:
+                print(f"❌ Error processing public key for {peer_email}: {e}")
+                self._show_session_error(f"Public key processing error: {str(e)}")
+                
+        except Exception as e:
+            print(f"❌ Error establishing secure session: {e}")
+            self._show_session_error(f"Session establishment error: {str(e)}")
+    
+    def _on_session_established(self, peer_id: str, success: bool, message: str):
+        """
+        Callback for when secure session establishment completes.
         
-        # Create chat ID for Firebase monitoring
-        chat_id = f"chat_{min(current_uid, peer_uid)}_{max(current_uid, peer_uid)}"
-        self.active_chat_session['chat_id'] = chat_id
+        Args:
+            peer_id: Peer identifier
+            success: Whether session establishment succeeded
+            message: Status message
+        """
+        try:
+            if success:
+                print(f"✅ Secure session established with peer {peer_id}")
+                
+                # Update UI to show secure session is active
+                if self.active_chat_session:
+                    peer_email = self.active_chat_session.get('email', 'Unknown')
+                    self.chat_status_label.configure(
+                        text=f"🔐 Secure session active with {peer_email}",
+                        text_color=("#51cf66", "#51cf66")
+                    )
+                    
+                    # Add system message about encryption
+                    self._add_system_message(
+                        "🔐 End-to-end encryption enabled with RSA-2048 + Blowfish-256"
+                    )
+                    
+                    # Update security status
+                    if hasattr(self, 'security_status_label') and self.security_status_label:
+                        self.security_status_label.configure(
+                            text="🔐 RSA-2048 + Blowfish-256 encryption active",
+                            text_color=("#51cf66", "#51cf66")
+                        )
+                    
+                    # Enable message input controls
+                    if hasattr(self, 'message_entry') and self.message_entry:
+                        self.message_entry.configure(state="normal")
+                        self.message_entry.configure(
+                            placeholder_text="Type your secure message..."
+                        )
+                        self.message_entry.focus()
+                    
+                    if hasattr(self, 'send_btn') and self.send_btn:
+                        self.send_btn.configure(state="normal")
+                    
+                    if hasattr(self, 'file_btn') and self.file_btn:
+                        self.file_btn.configure(state="normal")
+                
+            else:
+                print(f"❌ Failed to establish secure session with peer {peer_id}: {message}")
+                self._show_session_error(f"Session establishment failed: {message}")
+                
+        except Exception as e:
+            print(f"❌ Error in session establishment callback: {e}")
+    
+    def _show_session_error(self, error_message: str):
+        """
+        Show session establishment error and handle gracefully.
         
-        # Set up chat monitoring for peer status changes
-        self.firebase_manager.listen_for_chat_updates(chat_id, self._handle_chat_updates)
-        
-        # Update participant status to online
-        self.firebase_manager.update_chat_participant_status(chat_id, 'online')
-        
-        # Update header status
-        self.chat_status_label.configure(
-            text=f"Chatting with {peer_user.get('email', 'Unknown')}",
-            text_color=("#51cf66", "#51cf66")
-        )
-        
-        # Show chat interface
-        self._show_chat_interface()
+        Args:
+            error_message: Error message to display
+        """
+        try:
+            # Update status to show error
+            self.chat_status_label.configure(
+                text=f"❌ {error_message}",
+                text_color=("#f44336", "#f44336")
+            )
+            
+            # Add system message about the error
+            self._add_system_message(f"❌ {error_message}")
+            
+            # Update security status
+            if hasattr(self, 'security_status_label') and self.security_status_label:
+                self.security_status_label.configure(
+                    text="❌ Encryption failed - session not secure",
+                    text_color=("#f44336", "#f44336")
+                )
+            
+            # Disable message input controls
+            if hasattr(self, 'message_entry') and self.message_entry:
+                self.message_entry.configure(state="disabled")
+                self.message_entry.configure(
+                    placeholder_text="Session establishment failed - cannot send messages"
+                )
+            
+            if hasattr(self, 'send_btn') and self.send_btn:
+                self.send_btn.configure(state="disabled")
+            
+            if hasattr(self, 'file_btn') and self.file_btn:
+                self.file_btn.configure(state="disabled")
+            
+            # Show error dialog after a delay
+            self.root.after(2000, lambda: messagebox.showerror(
+                "Session Error", 
+                f"Failed to establish secure session:\n{error_message}\n\nPlease try again."
+            ))
+            
+        except Exception as e:
+            print(f"Error displaying session error: {e}")
     
     def _show_chat_interface(self):
         """Display the chat interface."""
@@ -652,6 +847,60 @@ class GUIManager:
         
         # Input area
         self._create_input_area(chat_container)
+    
+    def _add_system_message(self, message: str):
+        """
+        Add system message to chat (for security notifications).
+        
+        Args:
+            message: System message to display
+        """
+        try:
+            if hasattr(self, 'messages_frame') and self.messages_frame:
+                from datetime import datetime
+                
+                # Create system message frame
+                msg_frame = ctk.CTkFrame(
+                    self.messages_frame,
+                    fg_color=("#e3f2fd", "#263238"),
+                    corner_radius=10
+                )
+                msg_frame.pack(fill="x", padx=20, pady=5)
+                
+                # System message content
+                msg_content = ctk.CTkFrame(msg_frame, fg_color="transparent")
+                msg_content.pack(fill="x", padx=10, pady=8)
+                
+                # Message text
+                msg_label = ctk.CTkLabel(
+                    msg_content,
+                    text=message,
+                    font=ctk.CTkFont(size=12, weight="bold"),
+                    text_color=("#1565c0", "#81c784"),
+                    anchor="w",
+                    justify="left"
+                )
+                msg_label.pack(fill="x")
+                
+                # Timestamp
+                timestamp = datetime.now().strftime("%H:%M:%S")
+                time_label = ctk.CTkLabel(
+                    msg_content,
+                    text=timestamp,
+                    font=ctk.CTkFont(size=10),
+                    text_color=("#757575", "#757575"),
+                    anchor="w"
+                )
+                time_label.pack(fill="x")
+                
+                # Scroll to bottom
+                self.messages_frame.update()
+                if hasattr(self, 'messages_canvas'):
+                    self.messages_canvas.configure(scrollregion=self.messages_canvas.bbox("all"))
+                    self.messages_canvas.yview_moveto(1.0)
+        
+        except Exception as e:
+            print(f"Error adding system message: {e}")
     
     def _create_chat_header(self, parent):
         """Create chat header."""
@@ -756,51 +1005,73 @@ class GUIManager:
         info_label.pack(pady=(5, 0))
     
     def _create_input_area(self, parent):
-        """Create message input area."""
-        input_frame = ctk.CTkFrame(parent, height=70)
+        """Create message input area with security status."""
+        input_frame = ctk.CTkFrame(parent, height=90)
         input_frame.pack(fill="x")
         input_frame.pack_propagate(False)
         
+        # Security status frame
+        security_frame = ctk.CTkFrame(input_frame, height=20, fg_color="transparent")
+        security_frame.pack(fill="x", padx=15, pady=(5, 0))
+        security_frame.pack_propagate(False)
+        
+        # Security status label
+        self.security_status_label = ctk.CTkLabel(
+            security_frame,
+            text="🔐 RSA-2048 encryption establishing...",
+            font=ctk.CTkFont(size=10),
+            text_color=("#ff9800", "#ff9800"),
+            anchor="w"
+        )
+        self.security_status_label.pack(side="left")
+        
+        # Input controls frame
+        controls_frame = ctk.CTkFrame(input_frame, height=50, fg_color="transparent")
+        controls_frame.pack(fill="x", padx=15, pady=(5, 15))
+        controls_frame.pack_propagate(False)
+        
         # File upload button
-        file_btn = ctk.CTkButton(
-            input_frame,
+        self.file_btn = ctk.CTkButton(
+            controls_frame,
             text="File",
             command=self._upload_file,
             width=50,
             height=45,
             fg_color=("#28a745", "#1e7e34"),
             hover_color=("#218838", "#155724"),
-            font=ctk.CTkFont(size=12)
+            font=ctk.CTkFont(size=12),
+            state="disabled"  # Disabled until session established
         )
-        file_btn.pack(side="left", padx=(15, 5), pady=12)
+        self.file_btn.pack(side="left", padx=(0, 5))
         
         # Message entry
         self.message_entry = ctk.CTkEntry(
-            input_frame,
-            placeholder_text="Type your message...",
+            controls_frame,
+            placeholder_text="Establishing secure session...",
             height=45,
-            font=ctk.CTkFont(size=14)
+            font=ctk.CTkFont(size=14),
+            state="disabled"  # Disabled until session established
         )
-        self.message_entry.pack(side="left", fill="both", expand=True, padx=(5, 10), pady=12)
+        self.message_entry.pack(side="left", fill="both", expand=True, padx=(5, 10))
         
         # Send button
-        send_btn = ctk.CTkButton(
-            input_frame,
+        self.send_btn = ctk.CTkButton(
+            controls_frame,
             text="Send",
             command=self._send_message,
             width=60,
             height=45,
             fg_color=("#1e88e5", "#1565c0"),
-            font=ctk.CTkFont(size=12)
+            font=ctk.CTkFont(size=12),
+            state="disabled"  # Disabled until session established
         )
-        send_btn.pack(side="right", padx=(0, 15), pady=12)
+        self.send_btn.pack(side="right")
         
-        # Bind Enter key
-        self.message_entry.bind('<Return>', lambda e: self._send_message())
-        self.message_entry.focus()
+        # Bind Enter key (will be enabled after session establishment)
+        self.message_entry.bind('<Return>', lambda e: self._send_message() if self.message_entry.cget("state") == "normal" else None)
     
     def _send_message(self):
-        """Send a message."""
+        """Send a secure message using established session key."""
         if not self.active_chat_session or not self.message_entry:
             return
         
@@ -808,19 +1079,41 @@ class GUIManager:
         if not message:
             return
         
-        # Clear entry
-        self.message_entry.delete(0, "end")
-        
-        # Add to display
-        self._add_message_to_chat("You", message, is_own=True)
-        
-        # TODO: Send via network manager
-        # For now, simulate echo response
-        self.root.after(1000, lambda: self._add_message_to_chat(
-            self.active_chat_session.get('email', 'Peer'),
-            f"Echo: {message}",
-            is_own=False
-        ))
+        try:
+            peer_uid = self.active_chat_session.get('uid', '')
+            
+            # Check if secure session is established
+            if not self.network_manager.is_session_established(peer_uid):
+                self._add_system_message("❌ Cannot send message: Secure session not established")
+                return
+            
+            # Clear entry
+            self.message_entry.delete(0, "end")
+            
+            # Add to display immediately
+            self._add_message_to_chat("You", message, is_own=True)
+            
+            # Send encrypted message via network manager
+            success = self.network_manager.send_message(
+                peer_uid, 
+                "text_message", 
+                {
+                    "text": message,
+                    "sender": self.current_user.get('email', 'Unknown') if self.current_user else 'Unknown',
+                    "encryption": "RSA-2048-OAEP + Blowfish-256-CBC"
+                }
+            )
+            
+            if not success:
+                # Show error and add system message
+                self._add_system_message("❌ Failed to send message - please try again")
+                print(f"❌ Failed to send message to {peer_uid}")
+            else:
+                print(f"✅ Secure message sent to {peer_uid}")
+                
+        except Exception as e:
+            print(f"❌ Error sending message: {e}")
+            self._add_system_message(f"❌ Error sending message: {str(e)}")
     
     def _add_message_to_chat(self, sender, message, is_own=False, message_type="text"):
         """Add a message to the chat display."""
@@ -1336,11 +1629,34 @@ class GUIManager:
                     self.firebase_manager.respond_to_chat_request(from_uid, request_id, False, None)
     
     def _handle_text_message(self, message, peer_id):
-        """Handle incoming text message."""
-        if self.active_chat_session and self.current_view == "chat":
-            sender = message.get('sender', 'Unknown')
-            content = message.get('content', {}).get('content', '')
-            self._add_message_to_chat(sender, content, is_own=False)
+        """Handle incoming encrypted text message."""
+        try:
+            if self.active_chat_session and self.current_view == "chat":
+                # Extract message content
+                content_data = message.get('content', {})
+                text_content = content_data.get('text', '')
+                sender_email = content_data.get('sender', 'Unknown')
+                encryption_info = content_data.get('encryption', 'Unknown')
+                
+                if text_content:
+                    # Add the decrypted message to chat
+                    self._add_message_to_chat(sender_email, text_content, is_own=False)
+                    
+                    # Add encryption status (only first time)
+                    if not hasattr(self, '_encryption_status_shown'):
+                        self._add_system_message(f"🔐 Message encrypted with {encryption_info}")
+                        self._encryption_status_shown = True
+                    
+                    print(f"✅ Received encrypted message from {peer_id}: {text_content[:50]}...")
+                else:
+                    print(f"❌ Empty message content from {peer_id}")
+            else:
+                print(f"❌ Received message from {peer_id} but no active chat session")
+                
+        except Exception as e:
+            print(f"❌ Error handling text message from {peer_id}: {e}")
+            if self.active_chat_session and self.current_view == "chat":
+                self._add_system_message("❌ Error processing received message")
     
     def _handle_session_key(self, message, peer_id):
         """Handle session key exchange."""

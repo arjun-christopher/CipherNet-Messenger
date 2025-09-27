@@ -12,19 +12,36 @@ CipherNet Messenger is a secure, decentralized peer-to-peer messaging applicatio
 
 ### Key Features
 
-- **End-to-End Encryption**: Hybrid RSA-Blowfish cryptosystem for maximum security
+#### Enhanced Security Architecture
+- **RSA-2048 with PKCS#1 OAEP**: Industry-standard asymmetric encryption for key exchange
+- **Blowfish-256-CBC**: High-performance symmetric encryption for message content
+- **Secure Session Initiation**: Multi-step handshake with cryptographic validation
+- **SHA-256 Key Fingerprinting**: Public key authentication and verification
+- **HMAC-SHA256**: Message authentication codes for integrity verification
+- **Cryptographically Secure Random**: Hardware entropy for key generation
+
+#### Network & Communication
 - **Peer-to-Peer Architecture**: Direct communication without central server dependency
-- **Data Integrity**: SHA-256 based integrity controls for all communications
+- **Secure Signaling Protocol**: Firebase-based peer discovery with encryption metadata
+- **Hybrid Encryption Protocol**: RSA key exchange + symmetric message encryption
+- **Real-time Session Management**: Automatic session establishment and teardown
+- **Connection State Monitoring**: Network resilience and automatic reconnection
+
+#### User Experience
 - **Map-Based User Discovery**: Interactive canvas-based interface for finding online users
 - **Single Chat Session Management**: One-to-one chat sessions with duplicate prevention
+- **Security Status Indicators**: Real-time encryption status and key exchange progress
 - **Secure File Transfer**: Upload and share files with visual chat integration
-- **Clean Professional UI**: Modern interface without emojis for accessibility
-- **Real-time Status Updates**: Automatic refresh and bidirectional request handling
+- **Clean Professional UI**: Modern interface optimized for security-focused users
+- **Desktop Notifications**: Cross-platform notification system
+- **Session Isolation**: Complete data separation between chat sessions
+
+#### Performance & Reliability
 - **Single Session Enforcement**: Prevents concurrent logins for enhanced security
 - **Comprehensive Cleanup**: Zero-delay deletion of all session data on exit
-- **Desktop Notifications**: Cross-platform notification system
 - **Python 3.13 Compatible**: Updated for latest Python version compatibility
 - **Automated Database Maintenance**: Background cleanup of stale Firebase data
+- **Memory-Safe Operations**: Secure key storage and automatic cleanup
 
 ## Problem Statement
 
@@ -128,33 +145,74 @@ User A ←→ Firebase (Auth/Signaling) ←→ User B
 
 ## Security Implementation
 
-### Cryptographic Algorithms
+### Enhanced Cryptographic Algorithms
 
-#### 1. **RSA (Rivest-Shamir-Adleman)**
-- **Purpose**: Secure session key exchange
-- **Key Size**: 2048-bit
-- **Padding**: PKCS#1 OAEP for enhanced security
+#### 1. **RSA-2048 with PKCS#1 OAEP**
+- **Algorithm**: RSA (Rivest-Shamir-Adleman) 
+- **Key Size**: Enforced 2048-bit keys (industry standard)
+- **Padding**: PKCS#1 OAEP with SHA-256 for maximum security
+- **Purpose**: Secure session key exchange and peer authentication
+- **Entropy**: Hardware-based secure random number generation
+- **Validation**: Automatic key size and format validation
 
-#### 2. **Blowfish**
-- **Purpose**: High-speed bulk data encryption
-- **Block Size**: 64-bit blocks
-- **Key Length**: Variable (up to 448 bits)
+#### 2. **Blowfish-256-CBC**
+- **Algorithm**: Blowfish in CBC (Cipher Block Chaining) mode
+- **Key Size**: Enhanced 256-bit session keys (increased from 128-bit)
+- **Block Size**: 64-bit blocks with secure initialization vectors
+- **Purpose**: High-speed bulk data encryption for messages and files
+- **Performance**: Optimized for real-time message encryption
 
-#### 3. **SHA-256**
-- **Purpose**: Data integrity verification
+#### 3. **SHA-256 Cryptographic Hashing**
+- **Algorithm**: SHA-256 (Secure Hash Algorithm)
 - **Applications**: 
-  - HMAC-SHA256 for message authentication
-  - Full-file hashing for file integrity
+  - RSA public key fingerprinting and validation
+  - HMAC-SHA256 message authentication codes
+  - File integrity verification and validation
+  - Session key derivation and management
 
-### Security Protocols
+### Enhanced Security Protocols
 
-#### Hybrid Encryption Protocol
+#### Secure Session Initiation Protocol
 
-1. User A generates random 128-bit session key (`K_session`)
-2. User A encrypts `K_session` with User B's RSA public key
-3. User A sends encrypted session key to User B
-4. User B decrypts with their RSA private key
-5. All subsequent communication uses Blowfish with `K_session`
+**Phase 1: Authentication (Firebase)**
+1. User authenticates with Firebase (email/password)
+2. No session key exists yet - authentication only
+
+**Phase 2: Peer Discovery** 
+1. Firebase acts as secure relay for public key exchange
+2. Users publish RSA-2048 public keys to authenticated lobby
+3. Public key fingerprints calculated and shared for validation
+4. IP addresses shared through encrypted Firebase channels
+
+**Phase 3: RSA-2048 Key Exchange**
+1. **User A** generates cryptographically secure 256-bit session key (`K_session`)
+2. **User A** encrypts `K_session` with **User B's** RSA-2048 public key using PKCS#1 OAEP-SHA256
+3. **User A** sends encrypted session key package with metadata:
+   ```json
+   {
+     "encrypted_session_key": "base64_encoded_data",
+     "encryption_algorithm": "RSA-2048-OAEP-SHA256", 
+     "session_algorithm": "Blowfish-256-CBC",
+     "sender_key_fingerprint": "sha256_fingerprint",
+     "timestamp": "unix_timestamp_ms"
+   }
+   ```
+4. **User B** validates encryption parameters and sender identity
+5. **User B** decrypts `K_session` with their RSA-2048 private key
+6. **User B** confirms session establishment 
+
+**Phase 4: Secure Communication**
+- All subsequent messages encrypted with Blowfish-256-CBC using `K_session`
+- Each message includes HMAC-SHA256 authentication code
+- Session keys isolated per peer connection
+
+#### Security Standards Compliance
+
+- **Algorithms**: RSA-2048, PKCS#1 OAEP, SHA-256, Blowfish-256
+- **Standards**: PKCS#1 OAEP padding standard compliance
+- **Protocols**: Secure Signaling & Peer Discovery + Hybrid Encryption Protocol
+- **Key Management**: Automatic generation, validation, and secure cleanup
+- **Authentication**: Multi-layer validation with cryptographic fingerprints
 
 #### Secure Signaling & Peer Discovery
 
