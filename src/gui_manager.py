@@ -1088,10 +1088,12 @@ class GUIManager:
         
         # Notify peer about chat termination via Firebase
         if chat_id:
+            print(f"🔄 Terminating chat {chat_id} by user {current_uid}")
             # Update current user's status to 'terminated' and set chat as terminated
             self.firebase_manager.update_chat_participant_status(chat_id, 'terminated')
             # Set chat termination flag that both users can see
             self.firebase_manager.set_chat_terminated(chat_id, current_uid)
+            print(f"✅ Chat termination signals sent for {chat_id}")
             # Small delay before stopping listener to ensure peer gets the update
             self.root.after(500, lambda: self.firebase_manager.stop_listening(f"chats/{chat_id}"))
         
@@ -1315,12 +1317,16 @@ class GUIManager:
         
         try:
             current_uid = self.current_user.get('uid', '') if self.current_user else ''
+            print(f"🔄 Chat update received: {chat_data}")
             
             # Check if chat has been terminated
             chat_status = chat_data.get('status', '')
             terminated_by = chat_data.get('terminated_by', '')
             
+            print(f"📊 Chat status: {chat_status}, terminated_by: {terminated_by}, current_uid: {current_uid}")
+            
             if chat_status == 'terminated' and terminated_by and terminated_by != current_uid:
+                print(f"🚨 Chat terminated by peer {terminated_by}, handling termination")
                 # Chat was terminated by the peer, terminate our side too
                 self.root.after(0, lambda: self._handle_peer_chat_termination())
                 return
@@ -1331,7 +1337,10 @@ class GUIManager:
             
             # Check if peer has terminated the chat
             peer_status = participants.get(peer_uid, {}).get('status', '')
+            print(f"👥 Peer {peer_uid} status: {peer_status}")
+            
             if peer_status == 'terminated':
+                print(f"🚨 Peer {peer_uid} terminated chat, handling termination")
                 # Peer has ended the chat, terminate our side too
                 self.root.after(0, lambda: self._handle_peer_chat_termination())
                 
@@ -1347,9 +1356,11 @@ class GUIManager:
     def _handle_peer_chat_termination(self):
         """Handle when peer terminates the chat session."""
         if not self.active_chat_session:
+            print("⚠️ No active chat session for peer termination")
             return
         
         peer_email = self.active_chat_session.get('email', 'Unknown')
+        print(f"🚨 Handling peer termination from {peer_email}")
         
         # Show notification that peer ended the chat
         messagebox.showinfo(
@@ -1358,9 +1369,11 @@ class GUIManager:
         )
         
         # End chat session without showing confirmation
+        print(f"🔄 Ending chat session without confirmation")
         self._end_chat_session(show_confirmation=False)
         
         # Ensure redirection to dashboard after notification
+        print(f"📍 Scheduling dashboard redirect")
         self.root.after(200, self._ensure_dashboard_redirect)
     
     def _ensure_dashboard_redirect(self):

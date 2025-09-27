@@ -317,7 +317,11 @@ class FirebaseManager:
                 'last_activity': current_time
             }
             
-            return self._update_data(chat_path, updates)
+            print(f"🔥 Setting chat {chat_id} as terminated by {terminator_uid}")
+            print(f"📊 Updates: {updates}")
+            result = self._update_data(chat_path, updates)
+            print(f"✅ Chat termination update result: {result}")
+            return result
             
         except Exception as e:
             print(f"Failed to set chat as terminated: {e}")
