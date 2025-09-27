@@ -55,6 +55,21 @@ class NotificationManager:
         
         self._send_notification(title, body, Urgency.Normal)
     
+    def notify_chat_accepted(self, target_email: str):
+        """
+        Show notification when chat request is accepted.
+        
+        Args:
+            target_email: Email of user who accepted the request
+        """
+        if not self.enabled:
+            return
+        
+        title = "Chat Request Accepted"
+        body = f"{target_email} accepted your chat request! Ready to connect."
+        
+        self._send_notification(title, body, Urgency.Normal)
+    
     def notify_new_message(self, sender_email: str, message: str):
         """
         Show notification for new message.

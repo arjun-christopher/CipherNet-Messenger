@@ -56,6 +56,7 @@ class GUIManager:
         self.online_users = []
         self.public_key_pem = None
         self.private_key_pem = None
+        self.processed_requests = set()  # Track processed request IDs
     
     def start_application(self):
         """Start the GUI application."""
@@ -418,9 +419,69 @@ class GUIManager:
         """Periodic refresh of online users."""
         if self.current_user:
             self._refresh_online_users()
+            self._check_chat_responses()
             # Schedule next refresh
             self.root.after(30000, self._periodic_refresh)
-    
+
+    def _check_chat_responses(self):
+        """Check for accepted chat requests and establish connections."""
+        if not self.current_user:
+            return
+            
+        try:
+            accepted_requests = self.firebase_manager.check_sent_requests_responses()
+            
+            for request in accepted_requests:
+                request_id = request.get('request_id')
+                
+                # Skip if we already processed this request
+                if request_id in self.processed_requests:
+                    continue
+                
+                # Mark as processed to avoid duplicates
+                self.processed_requests.add(request_id)
+                
+                target_email = request.get('target_email', 'Unknown')
+                chat_info = request.get('chat_info', {})
+                participants = chat_info.get('participants', {})
+                
+                # Find the target user's connection info
+                target_ip = None
+                target_port = None
+                
+                for uid, participant in participants.items():
+                    if uid != self.current_user['uid']:
+                        target_ip = participant.get('ip')
+                        target_port = participant.get('port', 8888)
+                        break
+                
+                if target_ip and target_port:
+                    # Show notification that request was accepted
+                    self.notification_manager.notify_chat_accepted(target_email)
+                    
+                    # Show connection dialog
+                    result = messagebox.askyesno(
+                        "Chat Request Accepted",
+                        f"{target_email} accepted your chat request!\n\n"
+                        f"Connection details:\nIP: {target_ip}\nPort: {target_port}\n\n"
+                        f"Start secure chat session?"
+                    )
+                    
+                    if result:
+                        # TODO: Start chat session with the target
+                        messagebox.showinfo(
+                            "Chat Session", 
+                            f"Starting secure chat with {target_email}\n"
+                            f"Connecting to {target_ip}:{target_port}"
+                        )
+                    
+                    # Clean up the request after handling
+                    request_path = f"requests/{request['target_uid']}/{request['request_id']}"
+                    self.firebase_manager._delete_data(request_path)
+                
+        except Exception as e:
+            print(f"Error checking chat responses: {e}")
+
     def _clear_current_frame(self):
         """Clear the current frame."""
         if self.current_frame:

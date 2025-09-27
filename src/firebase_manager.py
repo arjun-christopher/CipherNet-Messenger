@@ -264,6 +264,61 @@ class FirebaseManager:
             print(f"Failed to get chat info: {e}")
             return None
     
+    def check_sent_requests_responses(self) -> List[Dict[str, Any]]:
+        """
+        Check for responses to chat requests we sent.
+        
+        Returns:
+            List of accepted requests with connection info
+        """
+        try:
+            current_user = self.auth_manager.get_current_user()
+            if not current_user:
+                return []
+            
+            accepted_requests = []
+            
+            # Check all users' request folders for our requests
+            lobby_data = self._read_data("lobby")
+            if not lobby_data:
+                return []
+            
+            for user_uid in lobby_data.keys():
+                if user_uid == current_user['uid']:
+                    continue
+                    
+                # Check requests sent to this user
+                requests_path = f"requests/{user_uid}"
+                user_requests = self._read_data(requests_path)
+                
+                if user_requests:
+                    for request_id, request_data in user_requests.items():
+                        if (isinstance(request_data, dict) and 
+                            request_data.get('from_uid') == current_user['uid'] and
+                            request_data.get('status') == 'accepted'):
+                            
+                            # Check if we have chat connection info
+                            chat_id = f"chat_{min(current_user['uid'], user_uid)}_{max(current_user['uid'], user_uid)}"
+                            chat_info = self.get_chat_connection_info(chat_id)
+                            
+                            if chat_info:
+                                # Get target user's email from lobby data
+                                target_email = lobby_data.get(user_uid, {}).get('email', 'Unknown')
+                                
+                                accepted_requests.append({
+                                    'request_id': request_id,
+                                    'target_uid': user_uid,
+                                    'target_email': target_email,
+                                    'chat_id': chat_id,
+                                    'chat_info': chat_info
+                                })
+            
+            return accepted_requests
+            
+        except Exception as e:
+            print(f"Failed to check sent requests: {e}")
+            return []
+
     def update_chat_connection_info(self, chat_id: str, local_ip: str) -> bool:
         """
         Update local connection info in chat.
