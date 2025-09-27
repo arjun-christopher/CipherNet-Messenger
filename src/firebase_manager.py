@@ -295,6 +295,34 @@ class FirebaseManager:
             print(f"Failed to update chat participant status: {e}")
             return False
     
+    def set_chat_terminated(self, chat_id: str, terminator_uid: str) -> bool:
+        """
+        Mark a chat as terminated by a specific user.
+        
+        Args:
+            chat_id: Chat identifier
+            terminator_uid: UID of the user who terminated the chat
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            current_time = int(time.time() * 1000)
+            chat_path = f"chats/{chat_id}"
+            
+            updates = {
+                'status': 'terminated',
+                'terminated_by': terminator_uid,
+                'terminated_at': current_time,
+                'last_activity': current_time
+            }
+            
+            return self._update_data(chat_path, updates)
+            
+        except Exception as e:
+            print(f"Failed to set chat as terminated: {e}")
+            return False
+    
     def check_sent_requests_responses(self) -> List[Dict[str, Any]]:
         """
         Check for responses to chat requests we sent.

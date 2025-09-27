@@ -1088,9 +1088,12 @@ class GUIManager:
         
         # Notify peer about chat termination via Firebase
         if chat_id:
+            # Update current user's status to 'terminated' and set chat as terminated
             self.firebase_manager.update_chat_participant_status(chat_id, 'terminated')
-            # Stop listening for chat updates
-            self.firebase_manager.stop_listening(f"chats/{chat_id}")
+            # Set chat termination flag that both users can see
+            self.firebase_manager.set_chat_terminated(chat_id, current_uid)
+            # Small delay before stopping listener to ensure peer gets the update
+            self.root.after(500, lambda: self.firebase_manager.stop_listening(f"chats/{chat_id}"))
         
         # Send termination message via network if connected
         try:
@@ -1311,8 +1314,19 @@ class GUIManager:
             return
         
         try:
-            participants = chat_data.get('participants', {})
             current_uid = self.current_user.get('uid', '') if self.current_user else ''
+            
+            # Check if chat has been terminated
+            chat_status = chat_data.get('status', '')
+            terminated_by = chat_data.get('terminated_by', '')
+            
+            if chat_status == 'terminated' and terminated_by and terminated_by != current_uid:
+                # Chat was terminated by the peer, terminate our side too
+                self.root.after(0, lambda: self._handle_peer_chat_termination())
+                return
+            
+            # Also check individual participant status for backward compatibility
+            participants = chat_data.get('participants', {})
             peer_uid = self.active_chat_session.get('uid', '')
             
             # Check if peer has terminated the chat
