@@ -379,7 +379,7 @@ class GUIManager:
             # Show "no users" message
             self.user_map_canvas.create_text(
                 canvas_width // 2, canvas_height // 2,
-                text="No other users online\\n\\nInvite friends to join CipherNet!",
+                text="No other users online! Invite friends to join CipherNet!",
                 font=("Arial", 16),
                 fill="#666" if ctk.get_appearance_mode() == "Light" else "#aaa",
                 justify="center"
@@ -508,7 +508,7 @@ class GUIManager:
         if self.active_chat_session:
             messagebox.showinfo(
                 "Chat Active",
-                f"You already have an active chat with {self.active_chat_session.get('email', 'someone')}.\\n\\nEnd the current chat to start a new one."
+                f"You already have an active chat with {self.active_chat_session.get('email', 'someone')}. End the current chat to start a new one."
             )
             return
         
@@ -523,7 +523,7 @@ class GUIManager:
         # Confirm chat request
         result = messagebox.askyesno(
             "Start Chat",
-            f"Send a chat request to {user.get('email', 'this user')}?\\n\\nThey will be notified and can accept or decline."
+            f"Send a chat request to {user.get('email', 'this user')}? They will be notified and can accept or decline."
         )
         
         if result:
@@ -1193,7 +1193,7 @@ class GUIManager:
                 # Show dialog
                 result = messagebox.askyesno(
                     "Chat Request",
-                    f"Chat request from:\\n{from_email}\\n\\n\\\"{message}\\\"\\n\\nAccept this chat request?"
+                    f"Chat request from: {from_email} \"{message}\". Accept this chat request?"
                 )
                 
                 if result:
