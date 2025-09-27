@@ -18,9 +18,12 @@ CipherNet Messenger is a secure, decentralized peer-to-peer messaging applicatio
 - **Private Peer Discovery**: Secure user discovery without exposing IP addresses
 - **Secure File Transfer**: Encrypted file sharing with integrity verification
 - **Single Session Enforcement**: Prevents concurrent logins for enhanced security
-- **Modern GUI**: Clean, intuitive interface built with CustomTkinter
+- **Modern Chat UI**: Instagram/WhatsApp-inspired interface with message bubbles
+- **Interactive Features**: Emoji picker, options menu, and modern input area
+- **Real-time Messaging**: Instant message delivery with read receipts
 - **Desktop Notifications**: Cross-platform notification system
 - **Bidirectional Chat Requests**: Real-time request/response handling with automatic cleanup
+- **Instant Data Cleanup**: Zero-delay deletion of chat and session data on exit
 - **Python 3.13 Compatible**: Updated for latest Python version compatibility
 - **Automated Database Maintenance**: Background cleanup of stale Firebase data
 
@@ -213,6 +216,46 @@ Login blocked: Another user (user2@gmail.com) is already logged in on this syste
 - **Decentralized Architecture**: No single point of failure
 - **Direct P2P**: Independent of central server uptime
 - **Session Recovery**: Graceful handling of network interruptions and reconnection
+
+## Modern User Interface
+
+### Instagram/WhatsApp-Inspired Design
+
+CipherNet features a modern, intuitive chat interface inspired by popular messaging platforms:
+
+#### Visual Design
+- **WhatsApp-Style Header**: Gradient green theme with user avatars and status indicators
+- **Message Bubbles**: Distinctive styling for own messages (green, right-aligned) and received messages (white/gray, left-aligned)
+- **User Avatars**: Circular avatar displays with first letter of user's email
+- **Modern Color Scheme**: Professional color palette with dark/light mode support
+- **Clean Typography**: Readable fonts with proper spacing and hierarchy
+
+#### Interactive Features
+- **Emoji Picker**: Quick access to common emojis (😊, ❤️, 👍, etc.)
+- **Options Menu**: Chat management (clear chat, close chat) with modern popup design
+- **Dynamic Send Button**: Visual feedback based on message content
+- **Auto-Scroll**: Automatic scrolling to latest messages
+- **Typing Detection**: Enhanced input handling for better user experience
+
+#### Chat Experience
+- **Message Timestamps**: Clean time display (HH:MM format)
+- **Read Receipts**: Double checkmark (✓✓) for sent messages
+- **System Messages**: Centered notifications for connection status and security updates
+- **Responsive Layout**: Adaptive design that works across different screen sizes
+- **Custom Scrollbar**: Themed scrollbar matching the overall design
+
+#### Technical Implementation
+- **CustomTkinter Framework**: Modern widgets with native OS styling
+- **Scrollable Message Container**: Efficient handling of long conversation history
+- **Error Handling**: Graceful degradation with user-friendly error messages
+- **Performance Optimized**: Smooth scrolling and responsive interactions
+
+### Instant Data Management
+
+- **Zero-Delay Cleanup**: Chat and session data deleted instantly upon app exit
+- **No Grace Periods**: Immediate processing of cleanup operations
+- **Session Enforcement**: Automatic detection and prevention of concurrent logins
+- **Real-time Updates**: Live status indicators and presence management
 
 ## Project Structure
 

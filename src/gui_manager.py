@@ -409,6 +409,34 @@ class GUIManager:
                         True,
                         local_ip
                     )
+                    
+                    # Create chat window immediately for the accepter
+                    try:
+                        # Get the requester's connection info from the request
+                        requester_ip = request_data.get('sender_ip', 'unknown')
+                        requester_port = request_data.get('sender_port', 8888)
+                        peer_id = f"{requester_ip}:{requester_port}"
+                        
+                        # Create and show chat window with modern UI
+                        chat_window = ChatWindow(
+                            peer_id=peer_id,
+                            peer_email=from_email,
+                            crypto_manager=self.crypto_manager,
+                            network_manager=self.network_manager,
+                            file_transfer_manager=self.file_transfer_manager,
+                            notification_manager=self.notification_manager
+                        )
+                        
+                        # Show success notification
+                        self.notification_manager.notify_chat_started(from_email)
+                        
+                    except Exception as e:
+                        print(f"Error creating chat window for accepted request: {e}")
+                        messagebox.showwarning(
+                            "Chat Window Error",
+                            f"Request accepted but failed to open chat window.\n"
+                            f"The other user should still be able to connect."
+                        )
                 else:
                     # Decline request
                     self.firebase_manager.respond_to_chat_request(
@@ -485,12 +513,33 @@ class GUIManager:
             )
             
             if result:
-                # TODO: Start chat session with the target
-                messagebox.showinfo(
-                    "Chat Session", 
-                    f"Starting secure chat with {target_email}\n"
-                    f"Connecting to {target_ip}:{target_port}"
-                )
+                # Start actual chat session with the target
+                try:
+                    # Connect to peer via network manager
+                    peer_id = f"{target_ip}:{target_port}"
+                    
+                    # Create and show chat window with modern UI
+                    chat_window = ChatWindow(
+                        peer_id=peer_id,
+                        peer_email=target_email,
+                        crypto_manager=self.crypto_manager,
+                        network_manager=self.network_manager,
+                        file_transfer_manager=self.file_transfer_manager,
+                        notification_manager=self.notification_manager
+                    )
+                    
+                    # Connect to the peer
+                    self.network_manager.connect_to_peer(target_ip, target_port)
+                    
+                    # Show success notification
+                    self.notification_manager.notify_chat_started(target_email)
+                    
+                except Exception as e:
+                    messagebox.showerror(
+                        "Connection Error",
+                        f"Failed to start chat session with {target_email}:\n{str(e)}"
+                    )
+                    print(f"Error starting chat session: {e}")
             
             # Request was already cleaned up before dialog
             

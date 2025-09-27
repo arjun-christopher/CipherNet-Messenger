@@ -70,6 +70,21 @@ class NotificationManager:
         
         self._send_notification(title, body, Urgency.Normal)
     
+    def notify_chat_started(self, peer_email: str):
+        """
+        Show notification when chat session starts.
+        
+        Args:
+            peer_email: Email of the chat peer
+        """
+        if not self.enabled:
+            return
+        
+        title = "Chat Session Started"
+        body = f"Secure chat session with {peer_email} is now active!"
+        
+        self._send_notification(title, body, Urgency.Normal)
+    
     def notify_new_message(self, sender_email: str, message: str):
         """
         Show notification for new message.
