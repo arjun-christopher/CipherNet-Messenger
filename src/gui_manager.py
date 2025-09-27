@@ -97,7 +97,7 @@ class GUIManager:
         # Title
         title_label = ctk.CTkLabel(
             self.current_frame,
-            text="🗺️ CipherNet Messenger",
+            text="CipherNet Messenger",
             font=ctk.CTkFont(size=28, weight="bold")
         )
         title_label.pack(pady=(40, 20))
@@ -129,7 +129,7 @@ class GUIManager:
         
         login_button = ctk.CTkButton(
             button_frame,
-            text="🚀 Login",
+            text="Login",
             command=self._handle_login,
             width=120,
             height=35,
@@ -139,7 +139,7 @@ class GUIManager:
         
         register_button = ctk.CTkButton(
             button_frame,
-            text="📝 Register",
+            text="Register",
             command=self._handle_register,
             width=120,
             height=35,
@@ -220,7 +220,7 @@ class GUIManager:
         # App title
         title_label = ctk.CTkLabel(
             header_frame,
-            text="🗺️ CipherNet Map",
+            text="CipherNet Map",
             font=ctk.CTkFont(size=20, weight="bold"),
             text_color="white"
         )
@@ -233,7 +233,7 @@ class GUIManager:
         # Logout button
         logout_button = ctk.CTkButton(
             controls_frame,
-            text="🚪 Logout",
+            text="Logout",
             command=self._handle_logout,
             width=80,
             height=35,
@@ -243,7 +243,7 @@ class GUIManager:
         logout_button.pack(side="right")
         
         # User info
-        user_info = f"👤 {self.current_user['email'] if self.current_user else 'Unknown'}"
+        user_info = f"{self.current_user['email'] if self.current_user else 'Unknown'}"
         user_label = ctk.CTkLabel(
             controls_frame,
             text=user_info,
@@ -255,7 +255,7 @@ class GUIManager:
         # Chat status
         self.chat_status_label = ctk.CTkLabel(
             controls_frame,
-            text="🔴 No active chat",
+            text="No active chat",
             font=ctk.CTkFont(size=12),
             text_color=("#e3f2fd", "#a0a0a0")
         )
@@ -291,7 +291,7 @@ class GUIManager:
         # Title
         map_title = ctk.CTkLabel(
             control_frame,
-            text="🌐 Online Users - Click on a user to start chatting",
+            text="Online Users - Click on a user to start chatting",
             font=ctk.CTkFont(size=16, weight="bold")
         )
         map_title.pack(side="left", pady=15)
@@ -311,7 +311,7 @@ class GUIManager:
         # Refresh button
         refresh_btn = ctk.CTkButton(
             controls_right,
-            text="🔄 Refresh",
+            text="Refresh",
             command=self._refresh_user_map,
             width=100,
             height=35,
@@ -370,7 +370,7 @@ class GUIManager:
             # Show "no users" message
             self.user_map_canvas.create_text(
                 canvas_width // 2, canvas_height // 2,
-                text="🌐 No other users online\\n\\n👥 Invite friends to join CipherNet!",
+                text="No other users online\\n\\nInvite friends to join CipherNet!",
                 font=("Arial", 16),
                 fill="#666" if ctk.get_appearance_mode() == "Light" else "#aaa",
                 justify="center"
@@ -462,7 +462,7 @@ class GUIManager:
         # Status indicator
         status_id = self.user_map_canvas.create_text(
             x, y + 68,
-            text=f"● {status_text}",
+            text=f"{status_text}",
             font=("Arial", 9),
             fill=status_color
         )
@@ -559,7 +559,7 @@ class GUIManager:
         
         # Update header status
         self.chat_status_label.configure(
-            text=f"💬 Chatting with {peer_user.get('email', 'Unknown')}",
+            text=f"Chatting with {peer_user.get('email', 'Unknown')}",
             text_color=("#51cf66", "#51cf66")
         )
         
@@ -640,7 +640,7 @@ class GUIManager:
         
         status_label = ctk.CTkLabel(
             details_frame,
-            text="🔒 End-to-end encrypted",
+            text="End-to-end encrypted",
             font=ctk.CTkFont(size=12),
             text_color=("#e3f2fd", "#a0a0a0"),
             anchor="w"
@@ -654,7 +654,7 @@ class GUIManager:
         # Back to map button
         back_btn = ctk.CTkButton(
             controls_frame,
-            text="🗺️ Map",
+            text="Map",
             command=self._show_user_map,
             width=90,
             height=35,
@@ -666,7 +666,7 @@ class GUIManager:
         # End chat button
         end_btn = ctk.CTkButton(
             controls_frame,
-            text="❌ End Chat",
+            text="End Chat",
             command=self._end_chat_session,
             width=100,
             height=35,
@@ -689,7 +689,7 @@ class GUIManager:
         
         welcome_label = ctk.CTkLabel(
             welcome_frame,
-            text="🔐 Secure Chat Session Started",
+            text="Secure Chat Session Started",
             font=ctk.CTkFont(size=16, weight="bold"),
             text_color=("#1e88e5", "#1e88e5")
         )
@@ -710,6 +710,19 @@ class GUIManager:
         input_frame.pack(fill="x")
         input_frame.pack_propagate(False)
         
+        # File upload button
+        file_btn = ctk.CTkButton(
+            input_frame,
+            text="File",
+            command=self._upload_file,
+            width=50,
+            height=45,
+            fg_color=("#28a745", "#1e7e34"),
+            hover_color=("#218838", "#155724"),
+            font=ctk.CTkFont(size=12)
+        )
+        file_btn.pack(side="left", padx=(15, 5), pady=12)
+        
         # Message entry
         self.message_entry = ctk.CTkEntry(
             input_frame,
@@ -717,17 +730,17 @@ class GUIManager:
             height=45,
             font=ctk.CTkFont(size=14)
         )
-        self.message_entry.pack(side="left", fill="both", expand=True, padx=(15, 10), pady=12)
+        self.message_entry.pack(side="left", fill="both", expand=True, padx=(5, 10), pady=12)
         
         # Send button
         send_btn = ctk.CTkButton(
             input_frame,
-            text="📤",
+            text="Send",
             command=self._send_message,
             width=60,
             height=45,
             fg_color=("#1e88e5", "#1565c0"),
-            font=ctk.CTkFont(size=20)
+            font=ctk.CTkFont(size=12)
         )
         send_btn.pack(side="right", padx=(0, 15), pady=12)
         
@@ -758,9 +771,14 @@ class GUIManager:
             is_own=False
         ))
     
-    def _add_message_to_chat(self, sender, message, is_own=False):
+    def _add_message_to_chat(self, sender, message, is_own=False, message_type="text"):
         """Add a message to the chat display."""
         if not self.messages_frame:
+            return
+        
+        # Handle file messages differently
+        if message_type == "file" and isinstance(message, dict):
+            self._add_file_message_to_chat(sender, message, is_own)
             return
         
         # Message container
@@ -827,6 +845,182 @@ class GUIManager:
         self.messages_frame._parent_canvas.update_idletasks()
         self.messages_frame._parent_canvas.yview_moveto(1.0)
     
+    def _upload_file(self):
+        """Handle file upload."""
+        if not self.active_chat_session:
+            return
+        
+        # Open file dialog
+        file_path = filedialog.askopenfilename(
+            title="Select File to Upload",
+            filetypes=[
+                ("All Files", "*.*"),
+                ("Images", "*.png *.jpg *.jpeg *.gif *.bmp *.tiff"),
+                ("Documents", "*.pdf *.doc *.docx *.txt *.rtf"),
+                ("Archives", "*.zip *.rar *.7z *.tar *.gz")
+            ]
+        )
+        
+        if file_path:
+            # Get file info
+            file_name = Path(file_path).name
+            file_size = Path(file_path).stat().st_size
+            
+            # Format file size
+            if file_size < 1024:
+                size_str = f"{file_size} B"
+            elif file_size < 1024 * 1024:
+                size_str = f"{file_size / 1024:.1f} KB"
+            else:
+                size_str = f"{file_size / (1024 * 1024):.1f} MB"
+            
+            # Add file message to chat
+            file_info = {
+                'type': 'file',
+                'name': file_name,
+                'size': size_str,
+                'path': file_path
+            }
+            
+            self._add_file_message_to_chat("You", file_info, is_own=True)
+            
+            # TODO: Send file via network manager
+            # For now, simulate echo response
+            self.root.after(1000, lambda: self._add_message_to_chat(
+                self.active_chat_session.get('email', 'Peer'),
+                f"File received: {file_name}",
+                is_own=False
+            ))
+    
+    def _add_file_message_to_chat(self, sender, file_info, is_own=False):
+        """Add a file message to the chat display."""
+        if not self.messages_frame:
+            return
+        
+        # Message container
+        msg_container = ctk.CTkFrame(self.messages_frame, fg_color="transparent")
+        msg_container.pack(fill="x", padx=15, pady=(0, 10))
+        
+        # Timestamp
+        timestamp = datetime.now().strftime("%H:%M")
+        
+        if is_own:
+            # Own file message (right-aligned, blue)
+            time_label = ctk.CTkLabel(
+                msg_container,
+                text=timestamp,
+                font=ctk.CTkFont(size=10),
+                text_color=("#666", "#aaa")
+            )
+            time_label.pack(side="right", anchor="e", padx=(0, 5))
+            
+            bubble_frame = ctk.CTkFrame(
+                msg_container,
+                fg_color=("#e3f2fd", "#1e88e5"),
+                corner_radius=20
+            )
+            bubble_frame.pack(side="right", padx=(50, 0))
+        else:
+            # Peer file message (left-aligned, gray)
+            time_label = ctk.CTkLabel(
+                msg_container,
+                text=timestamp,
+                font=ctk.CTkFont(size=10),
+                text_color=("#666", "#aaa")
+            )
+            time_label.pack(side="left", anchor="w", padx=(5, 0))
+            
+            bubble_frame = ctk.CTkFrame(
+                msg_container,
+                fg_color=("#f1f3f4", "#404040"),
+                corner_radius=20
+            )
+            bubble_frame.pack(side="left", padx=(0, 50))
+        
+        # File content frame
+        file_content_frame = ctk.CTkFrame(bubble_frame, fg_color="transparent")
+        file_content_frame.pack(padx=18, pady=12)
+        
+        # File icon and info
+        file_header_frame = ctk.CTkFrame(file_content_frame, fg_color="transparent")
+        file_header_frame.pack(fill="x", pady=(0, 8))
+        
+        # File type indicator
+        file_ext = Path(file_info['name']).suffix.lower()
+        if file_ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff']:
+            file_type = "Image"
+            type_color = "#ff6b6b"
+        elif file_ext in ['.pdf', '.doc', '.docx', '.txt', '.rtf']:
+            file_type = "Document"
+            type_color = "#4ecdc4"
+        elif file_ext in ['.zip', '.rar', '.7z', '.tar', '.gz']:
+            file_type = "Archive"
+            type_color = "#45b7d1"
+        else:
+            file_type = "File"
+            type_color = "#96ceb4"
+        
+        type_label = ctk.CTkLabel(
+            file_header_frame,
+            text=file_type,
+            font=ctk.CTkFont(size=10, weight="bold"),
+            text_color=type_color
+        )
+        type_label.pack(side="left")
+        
+        # File name
+        name_label = ctk.CTkLabel(
+            file_content_frame,
+            text=file_info['name'],
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color=("#1565c0", "white") if is_own else ("#333", "#ddd"),
+            wraplength=300,
+            justify="left"
+        )
+        name_label.pack(anchor="w")
+        
+        # File size
+        size_label = ctk.CTkLabel(
+            file_content_frame,
+            text=f"Size: {file_info['size']}",
+            font=ctk.CTkFont(size=10),
+            text_color=("#1565c0", "#ccc") if is_own else ("#666", "#aaa")
+        )
+        size_label.pack(anchor="w", pady=(2, 0))
+        
+        # Open file button (only for own files)
+        if is_own and 'path' in file_info:
+            open_btn = ctk.CTkButton(
+                file_content_frame,
+                text="Open File",
+                command=lambda: self._open_file(file_info['path']),
+                width=80,
+                height=25,
+                fg_color=("#28a745", "#1e7e34"),
+                hover_color=("#218838", "#155724"),
+                font=ctk.CTkFont(size=10)
+            )
+            open_btn.pack(anchor="w", pady=(8, 0))
+        
+        # Auto-scroll to bottom
+        self.messages_frame._parent_canvas.update_idletasks()
+        self.messages_frame._parent_canvas.yview_moveto(1.0)
+    
+    def _open_file(self, file_path):
+        """Open uploaded file in default application."""
+        try:
+            import os
+            import platform
+            
+            if platform.system() == 'Windows':
+                os.startfile(file_path)
+            elif platform.system() == 'Darwin':  # macOS
+                os.system(f'open "{file_path}"')
+            else:  # Linux
+                os.system(f'xdg-open "{file_path}"')
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not open file: {str(e)}")
+    
     def _end_chat_session(self):
         """End the current chat session."""
         if not self.active_chat_session:
@@ -852,7 +1046,7 @@ class GUIManager:
             
             # Update header status
             self.chat_status_label.configure(
-                text="🔴 No active chat",
+                text="No active chat",
                 text_color=("#e3f2fd", "#a0a0a0")
             )
             
@@ -903,7 +1097,7 @@ class GUIManager:
                 
                 # Show dialog
                 result = messagebox.askyesno(
-                    "💬 Chat Request",
+                    "Chat Request",
                     f"Chat request from:\\n{from_email}\\n\\n\\\"{message}\\\"\\n\\nAccept this chat request?"
                 )
                 
@@ -929,7 +1123,7 @@ class GUIManager:
     def _handle_session_key(self, message, peer_id):
         """Handle session key exchange."""
         if self.active_chat_session and self.current_view == "chat":
-            self._add_message_to_chat("System", "🔐 Encryption keys exchanged", is_own=False)
+            self._add_message_to_chat("System", "Encryption keys exchanged", is_own=False)
     
     def _handle_login(self):
         """Handle login."""
@@ -941,16 +1135,16 @@ class GUIManager:
             password = self.password_entry.get()
             
             if not email or not password:
-                self.status_label.configure(text="❌ Please fill in all fields")
+                self.status_label.configure(text="Please fill in all fields")
                 return
             
-            self.status_label.configure(text="🔄 Logging in...")
+            self.status_label.configure(text="Logging in...")
             self.root.update()
             
             # Login in background
             threading.Thread(target=self._login_worker, args=(email, password), daemon=True).start()
         except Exception as e:
-            self.status_label.configure(text=f"❌ Error: {str(e)}")
+            self.status_label.configure(text=f"Error: {str(e)}")
     
     def _handle_register(self):
         """Handle registration."""
@@ -962,16 +1156,16 @@ class GUIManager:
             password = self.password_entry.get()
             
             if not email or not password:
-                self.status_label.configure(text="❌ Please fill in all fields")
+                self.status_label.configure(text="Please fill in all fields")
                 return
             
-            self.status_label.configure(text="🔄 Registering...")
+            self.status_label.configure(text="Registering...")
             self.root.update()
             
             # Register in background
             threading.Thread(target=self._register_worker, args=(email, password), daemon=True).start()
         except Exception as e:
-            self.status_label.configure(text=f"❌ Error: {str(e)}")
+            self.status_label.configure(text=f"Error: {str(e)}")
     
     def _login_worker(self, email, password):
         """Login worker thread."""
@@ -990,14 +1184,14 @@ class GUIManager:
             self.notification_manager.notify_authentication_success(self.current_user['email'])
             self.show_main_screen()
         else:
-            self.status_label.configure(text=f"❌ Login failed: {message}")
+            self.status_label.configure(text=f"Login failed: {message}")
     
     def _register_callback(self, success, message):
         """Handle register result."""
         if success:
-            self.status_label.configure(text="✅ Registration successful! Please login.")
+            self.status_label.configure(text="Registration successful! Please login.")
         else:
-            self.status_label.configure(text=f"❌ Registration failed: {message}")
+            self.status_label.configure(text=f"Registration failed: {message}")
     
     def _handle_logout(self):
         """Handle logout."""
