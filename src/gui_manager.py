@@ -651,18 +651,6 @@ class GUIManager:
         controls_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
         controls_frame.pack(side="right", padx=20, pady=15)
         
-        # Back to map button
-        back_btn = ctk.CTkButton(
-            controls_frame,
-            text="Map",
-            command=self._show_user_map,
-            width=90,
-            height=35,
-            fg_color=("#28a745", "#1e7e34"),
-            hover_color=("#218838", "#155724")
-        )
-        back_btn.pack(side="right", padx=(10, 0))
-        
         # End chat button
         end_btn = ctk.CTkButton(
             controls_frame,
