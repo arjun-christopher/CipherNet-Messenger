@@ -355,6 +355,74 @@ class FirebaseManager:
             print(f"Failed to delete chat session {chat_id}: {e}")
             return False
     
+    def delete_chat_request(self, target_uid: str, request_id: str) -> bool:
+        """
+        Delete a specific chat request from Firebase.
+        
+        Args:
+            target_uid: UID of the user who received the request
+            request_id: Request identifier to delete
+        
+        Returns:
+            True if deleted successfully, False otherwise
+        """
+        try:
+            request_path = f"requests/{target_uid}/{request_id}"
+            print(f"🗑️ Deleting chat request: {request_id} from {target_uid}")
+            
+            result = self._delete_data(request_path)
+            
+            if result:
+                print(f"✅ Chat request {request_id} deleted successfully")
+            else:
+                print(f"❌ Failed to delete chat request {request_id}")
+            
+            return result
+            
+        except Exception as e:
+            print(f"Failed to delete chat request {request_id}: {e}")
+            return False
+    
+    def cleanup_user_requests(self, user_uid: str) -> int:
+        """
+        Clean up all requests for a specific user (both sent and received).
+        
+        Args:
+            user_uid: User's UID
+        
+        Returns:
+            Number of requests cleaned up
+        """
+        cleaned_count = 0
+        try:
+            print(f"🧼 Cleaning up all requests for user: {user_uid}")
+            
+            # Clean up requests received by this user
+            requests_path = f"requests/{user_uid}"
+            if self._delete_data(requests_path):
+                cleaned_count += 1
+                print(f"✅ Deleted received requests for {user_uid}")
+            
+            # Clean up requests sent by this user (scan all users)
+            lobby_data = self._read_data("lobby")
+            if lobby_data:
+                for target_uid in lobby_data.keys():
+                    if target_uid != user_uid:
+                        target_requests = self._read_data(f"requests/{target_uid}")
+                        if target_requests:
+                            for req_id, req_data in target_requests.items():
+                                if (isinstance(req_data, dict) and 
+                                    req_data.get('from_uid') == user_uid):
+                                    if self.delete_chat_request(target_uid, req_id):
+                                        cleaned_count += 1
+            
+            print(f"🎉 Cleaned up {cleaned_count} requests for user {user_uid}")
+            return cleaned_count
+            
+        except Exception as e:
+            print(f"Failed to cleanup user requests: {e}")
+            return cleaned_count
+    
     def check_sent_requests_responses(self) -> List[Dict[str, Any]]:
         """
         Check for responses to chat requests we sent.

@@ -1121,6 +1121,9 @@ class GUIManager:
             chat_terminate_success = self.firebase_manager.set_chat_terminated(chat_id, current_uid)
             print(f"📊 Firebase updates - Participant: {participant_update_success}, Chat: {chat_terminate_success}")
             
+            # Clean up related chat requests immediately
+            self._cleanup_chat_requests(current_uid, peer_uid)
+            
             # Schedule instant deletion of chat session data after giving peer time to see termination
             deletion_delay = 5000 if not network_message_sent else 3000  # Longer delay if network failed
             print(f"⏱️ Scheduling chat data deletion in {deletion_delay}ms (network_sent: {network_message_sent})")
@@ -1359,15 +1362,16 @@ class GUIManager:
             
             print(f"📊 Chat status: {chat_status}, terminated_by: {terminated_by}, current_uid: {current_uid}")
             
+            # Check if chat was terminated by peer (not by current user)
             if chat_status == 'terminated' and terminated_by and terminated_by != current_uid:
                 print(f"🚨 Chat terminated by peer {terminated_by}, handling termination")
-                # Chat was terminated by the peer, terminate our side too
-                self.root.after(0, lambda: self._handle_peer_chat_termination())
-                # Schedule deletion of the terminated chat data
+                # Chat was terminated by the peer, handle it as peer termination
                 chat_id = self.active_chat_session.get('chat_id', '') if self.active_chat_session else ''
-                if chat_id and not self._is_shutting_down:
-                    print(f"🗑️ Scheduling cleanup of terminated chat data: {chat_id}")
-                    self.root.after(3000, lambda: self._delete_chat_session_data(chat_id))
+                self.root.after(0, lambda: self._handle_peer_chat_termination())
+                return
+            elif chat_status == 'terminated' and terminated_by == current_uid:
+                print(f"📍 Chat terminated by current user {current_uid}, cleanup will be handled by _end_chat_session")
+                # This termination was initiated by current user, cleanup already scheduled
                 return
             
             # Also check individual participant status for backward compatibility
@@ -1417,8 +1421,16 @@ class GUIManager:
             f"{peer_email} has ended the chat session."
         )
         
-        # End chat session without showing confirmation (this won't trigger deletion since peer initiated)
-        print(f"🔄 Ending chat session without confirmation")
+        # Get current user info before ending session
+        current_uid = self.current_user.get('uid', '') if self.current_user else ''
+        peer_uid = self.active_chat_session.get('uid', '')
+        
+        # Clean up chat requests between users
+        if current_uid and peer_uid:
+            self._cleanup_chat_requests(current_uid, peer_uid)
+        
+        # End chat session without showing confirmation (peer initiated termination)
+        print(f"🔄 Ending chat session without confirmation due to peer termination")
         self._end_chat_session(show_confirmation=False)
         
         # Since peer terminated, also delete chat data after a short delay
@@ -1444,6 +1456,37 @@ class GUIManager:
                 
         except Exception as e:
             print(f"❌ Error deleting chat session data for {chat_id}: {e}")
+    
+    def _cleanup_chat_requests(self, current_uid: str, peer_uid: str):
+        """Clean up chat requests between current user and peer."""
+        try:
+            print(f"🧼 Cleaning up chat requests between {current_uid} and {peer_uid}")
+            
+            # Clean up requests in both directions
+            cleaned_count = 0
+            
+            # Check requests sent by current user to peer
+            peer_requests = self.firebase_manager._read_data(f"requests/{peer_uid}")
+            if peer_requests:
+                for request_id, request_data in peer_requests.items():
+                    if (isinstance(request_data, dict) and 
+                        request_data.get('from_uid') == current_uid):
+                        if self.firebase_manager.delete_chat_request(peer_uid, request_id):
+                            cleaned_count += 1
+            
+            # Check requests sent by peer to current user
+            current_requests = self.firebase_manager._read_data(f"requests/{current_uid}")
+            if current_requests:
+                for request_id, request_data in current_requests.items():
+                    if (isinstance(request_data, dict) and 
+                        request_data.get('from_uid') == peer_uid):
+                        if self.firebase_manager.delete_chat_request(current_uid, request_id):
+                            cleaned_count += 1
+            
+            print(f"🎉 Cleaned up {cleaned_count} chat requests")
+            
+        except Exception as e:
+            print(f"❌ Error cleaning up chat requests: {e}")
     
     def _ensure_dashboard_redirect(self):
         """Ensure user is redirected to dashboard/map view after chat termination."""
