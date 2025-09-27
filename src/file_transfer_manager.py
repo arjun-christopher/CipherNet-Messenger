@@ -19,26 +19,7 @@ class FileTransferManager:
     """Manages secure file transfer operations."""
     
     def __init__(self, config, crypto_manager, network_manager, notification_manager=None):
-        """
-        Initialize file transfer manager.
-                      print(f"❌ File integrity check failed! File may be corrupted or tampered with.")
-                print(f"   Saving anyway as partial file for debugging...")
-                try:
-                    # Save with _partial suffix for debugging
-                    safe_filename = self._sanitize_filename(f"PARTIAL_{filename}")
-                    file_path = self.downloads_dir / safe_filename
-                    with open(file_path, 'wb') as f:
-                        f.write(file_data)
-                    print(f"⚠️ Partial file saved for debugging: {file_path}")
-                    print(f"📁 Partial file location: {file_path.absolute()}")
-                except Exception as save_error:
-                    print(f"❌ Failed to save partial file: {save_error}")
-                return False   Args:
-            config: Configuration manager instance
-            crypto_manager: Cryptography manager instance
-            network_manager: Network manager instance
-            notification_manager: Notification manager instance (optional)
-        """
+
         self.config = config
         self.crypto_manager = crypto_manager
         self.network_manager = network_manager
@@ -90,7 +71,8 @@ class FileTransferManager:
             # Generate transfer ID
             transfer_id = f"send_{peer_id}_{int(os.urandom(4).hex(), 16)}"
             
-            # Store transfer info
+            # Store transfer info with timestamp
+            import time
             self.active_transfers[transfer_id] = {
                 'type': 'send',
                 'peer_id': peer_id,
@@ -98,7 +80,8 @@ class FileTransferManager:
                 'file_size': file_size,
                 'file_hash': file_hash,
                 'bytes_transferred': 0,
-                'status': 'initiating'
+                'status': 'initiating',
+                'start_time': time.time()
             }
             
             if progress_callback:
@@ -280,7 +263,8 @@ class FileTransferManager:
                 )
                 return
             
-            # Store incoming transfer info
+            # Store incoming transfer info with timestamp
+            import time
             self.active_transfers[transfer_id] = {
                 'type': 'receive',
                 'peer_id': peer_id,
@@ -290,7 +274,8 @@ class FileTransferManager:
                 'mime_type': mime_type,
                 'bytes_received': 0,
                 'chunks': [],
-                'status': 'pending'
+                'status': 'pending',
+                'start_time': time.time()
             }
             
             # Notify application about incoming file
@@ -416,6 +401,7 @@ class FileTransferManager:
     def _handle_file_complete(self, message: Dict[str, Any], peer_id: str):
         """
         Handle file transfer completion notification.
+        Note: We don't cleanup here to avoid race condition with last chunk processing.
         
         Args:
             message: File complete message
@@ -427,12 +413,17 @@ class FileTransferManager:
             success = content.get('success', False)
             
             if transfer_id in self.active_transfers:
+                transfer_info = self.active_transfers[transfer_id]
                 if success:
-                    print("File transfer completed successfully")
+                    print(f"📤 Sender reports successful completion for: {transfer_info.get('filename', 'unknown')}")
+                    # Mark as sender-complete but don't cleanup yet
+                    transfer_info['sender_complete'] = True
                 else:
-                    print("File transfer completed with errors")
+                    print(f"📤 Sender reports completion with errors for: {transfer_info.get('filename', 'unknown')}")
+                    transfer_info['sender_complete'] = False
                 
-                self._cleanup_transfer(transfer_id)
+                # Don't cleanup here - let receiver cleanup after processing all chunks
+                print(f"🔄 Keeping transfer active to process any remaining chunks...")
                 
         except Exception as e:
             print(f"Error handling file completion: {e}")
@@ -552,7 +543,22 @@ class FileTransferManager:
             }
             
             self.network_manager.send_message(peer_id, 'file_complete', complete_message)
-            self._cleanup_transfer(transfer_id)
+            print(f"📤 Sent completion notification for transfer: {transfer_id}")
+            
+            # Mark sender transfer as completed but don't cleanup immediately
+            if transfer_id in self.active_transfers:
+                self.active_transfers[transfer_id]['status'] = 'completed'
+                self.active_transfers[transfer_id]['completion_time'] = time.time()
+            
+            # Schedule cleanup of sender transfers after a short delay
+            def delayed_cleanup():
+                time.sleep(2)  # Wait 2 seconds for receiver to process
+                self.cleanup_sender_transfers()
+            
+            # Start cleanup in a separate thread
+            import threading
+            cleanup_thread = threading.Thread(target=delayed_cleanup, daemon=True)
+            cleanup_thread.start()
             
         except Exception as e:
             print(f"Error sending file chunks: {e}")
@@ -649,7 +655,8 @@ class FileTransferManager:
                 transfer_info['peer_id'], 'file_complete', complete_message
             )
             
-            # Cleanup transfer
+            # Cleanup transfer after successful assembly
+            print(f"🧹 Cleaning up transfer after successful file save: {transfer_id}")
             self._cleanup_transfer(transfer_id)
             
             return True
@@ -834,6 +841,51 @@ class FileTransferManager:
                         
         except Exception as e:
             print(f"Error saving incomplete transfers: {e}")
+    
+    def cleanup_stale_transfers(self, max_age_seconds: int = 300):
+        """
+        Clean up transfers that have been active too long (5 minutes default).
+        This prevents memory leaks from abandoned transfers.
+        
+        Args:
+            max_age_seconds: Maximum age in seconds before considering transfer stale
+        """
+        import time
+        current_time = time.time()
+        stale_transfers = []
+        
+        for transfer_id, transfer_info in self.active_transfers.items():
+            # Check if transfer has a start time
+            start_time = transfer_info.get('start_time', current_time)
+            age = current_time - start_time
+            
+            if age > max_age_seconds:
+                stale_transfers.append(transfer_id)
+                print(f"🕰️ Found stale transfer: {transfer_id} (age: {age:.1f}s)")
+        
+        # Clean up stale transfers
+        for transfer_id in stale_transfers:
+            transfer_info = self.active_transfers.get(transfer_id, {})
+            filename = transfer_info.get('filename', 'unknown')
+            print(f"🧹 Cleaning up stale transfer: {filename} ({transfer_id})")
+            self._cleanup_transfer(transfer_id)
+        
+        if stale_transfers:
+            print(f"🧹 Cleaned up {len(stale_transfers)} stale transfers")
+    
+    def cleanup_sender_transfers(self):
+        """
+        Clean up completed sender transfers that are no longer needed.
+        This should be called after sending completion notifications.
+        """
+        sender_transfers = []
+        for transfer_id, transfer_info in self.active_transfers.items():
+            if transfer_info.get('type') == 'send' and transfer_info.get('status') == 'completed':
+                sender_transfers.append(transfer_id)
+        
+        for transfer_id in sender_transfers:
+            print(f"🧹 Cleaning up completed sender transfer: {transfer_id}")
+            self._cleanup_transfer(transfer_id)
 
 
 class FileTransferError(Exception):
