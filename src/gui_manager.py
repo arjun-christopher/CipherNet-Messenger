@@ -2205,6 +2205,9 @@ class GUIManager:
     def _handle_file_request(self, message: Dict[str, Any], peer_id: str):
         """Handle incoming secure file transfer request."""
         try:
+            # First, let the file transfer manager handle the request (creates receive transfer)
+            self.file_transfer_manager._handle_file_request(message, peer_id)
+            
             if not self.active_chat_session or self.current_view != "chat":
                 return
             

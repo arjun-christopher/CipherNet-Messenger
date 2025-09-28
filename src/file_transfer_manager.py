@@ -296,9 +296,7 @@ class FileTransferManager:
             if self.notification_manager:
                 self.notification_manager.notify_file_request("Unknown User", filename, file_size)
             
-            # Auto-accept for demo (in real app, this should prompt user)
-            # We need to accept using the sender's transfer ID, not our receive ID
-            self.accept_file_transfer(transfer_id, peer_id)
+            # Note: File acceptance is handled by GUI - no auto-accept here
             
         except Exception as e:
             print(f"Error handling file request: {e}")
