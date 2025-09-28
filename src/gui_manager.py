@@ -63,9 +63,9 @@ class ToolTip:
         
         if appearance_mode == "Dark":
             # Blue-themed dark colors to match the app
-            bg_color = "#1a237e"      # Deep blue background
+            bg_color = "#2b35a3"      # Deep blue background
             text_color = "#e3f2fd"    # Light blue text
-            border_color = "#3949ab"  # Blue border
+            border_color = "#4959be"  # Blue border
         else:
             # Blue-themed light colors
             bg_color = "#e3f2fd"      # Light blue background
