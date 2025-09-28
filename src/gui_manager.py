@@ -912,6 +912,24 @@ class GUIManager:
             print(f"Error in file transfer progress: {e}")
             print(f"Error displaying session error: {e}")
     
+    def check_pending_file_transfers(self):
+        """Manually check for pending file transfers that might need to be saved."""
+        try:
+            if hasattr(self, 'file_transfer_manager'):
+                print("🔍 Manually checking pending file transfers...")
+                self.file_transfer_manager.check_pending_transfers()
+                
+                # Also show a status message in chat if we're in chat view
+                if hasattr(self, 'current_view') and self.current_view == "chat":
+                    active_transfers = self.file_transfer_manager.get_active_transfers()
+                    if active_transfers:
+                        count = len(active_transfers)
+                        self._display_system_message(f"🔍 Checked {count} active file transfers")
+                    else:
+                        self._display_system_message("✅ No pending file transfers found")
+        except Exception as e:
+            print(f"Error checking pending file transfers: {e}")
+    
     def _show_chat_interface(self):
         """Display the chat interface."""
         if not self.active_chat_session:

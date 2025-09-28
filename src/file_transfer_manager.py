@@ -43,6 +43,9 @@ class FileTransferManager:
         
         # Register network handlers
         self._register_handlers()
+        
+        # Start periodic monitoring thread
+        self._start_monitoring_thread()
     
     def send_file(self, peer_id: str, file_path: str, 
                   progress_callback: Optional[Callable[[int, int], None]] = None) -> bool:
@@ -239,6 +242,21 @@ class FileTransferManager:
         self.network_manager.register_message_handler('file_complete', self._handle_file_complete)
         self.network_manager.register_message_handler('file_cancel', self._handle_file_cancel)
     
+    def _start_monitoring_thread(self):
+        """Start a background thread to monitor transfer health."""
+        def monitor_transfers():
+            while True:
+                try:
+                    time.sleep(10)  # Check every 10 seconds
+                    self.check_pending_transfers()
+                    self.cleanup_stale_transfers()
+                except Exception as e:
+                    print(f"Error in transfer monitoring: {e}")
+        
+        monitor_thread = threading.Thread(target=monitor_transfers, daemon=True)
+        monitor_thread.start()
+        print("🔍 Transfer monitoring thread started")
+    
     def _handle_file_request(self, message: Dict[str, Any], peer_id: str):
         """
         Handle incoming file transfer request.
@@ -376,12 +394,27 @@ class FileTransferManager:
             print(f"📁 Secure file transfer progress: {progress:.1f}% (Blowfish + HMAC) - Chunk {chunk_index} - Total chunks: {chunks_received}")
             print(f"📊 Transfer status - Received: {transfer_info['bytes_received']}/{transfer_info['file_size']} bytes")
             
+            # Check if we should attempt to save the file
+            should_save = False
+            save_reason = ""
+            
             if is_last_chunk:
-                print(f"🏁 Last chunk received! Assembling and saving file...")
+                should_save = True
+                save_reason = "last chunk flag set"
+            elif progress >= 99.0:  # Safety check for near-complete transfers
+                should_save = True
+                save_reason = f"transfer appears complete ({progress:.1f}%)"
+            elif transfer_info['bytes_received'] >= transfer_info['file_size']:
+                should_save = True
+                save_reason = "all bytes received"
+            
+            if should_save:
+                print(f"🏁 Attempting file save - {save_reason}")
                 print(f"🔍 Debug info before assembly:")
                 print(f"   - Transfer ID: {transfer_id}")
                 print(f"   - Filename: {transfer_info.get('filename', 'UNKNOWN')}")
                 print(f"   - Total chunks: {len(transfer_info['chunks'])}")
+                print(f"   - Bytes received: {transfer_info['bytes_received']}/{transfer_info['file_size']}")
                 print(f"   - Downloads dir: {self.downloads_dir}")
                 print(f"   - Downloads dir exists: {self.downloads_dir.exists()}")
                 
@@ -389,11 +422,22 @@ class FileTransferManager:
                 result = self._assemble_and_save_file(transfer_id)
                 print(f"🏁 File assembly result: {'SUCCESS' if result else 'FAILED'}")
                 
-            elif progress >= 99.0:  # Safety check for near-complete transfers
-                print(f"⚠️ Transfer appears complete ({progress:.1f}%) but last chunk flag not set. Attempting to save...")
-                # Try to save what we have
-                result = self._assemble_and_save_file(transfer_id)
-                print(f"⚠️ Forced assembly result: {'SUCCESS' if result else 'FAILED'}")
+                if not result:
+                    # If save failed, mark transfer for retry
+                    transfer_info['save_failed'] = True
+                    transfer_info['last_save_attempt'] = time.time()
+            
+            # Add periodic check for stalled transfers that might need saving
+            elif progress > 95.0:  # Check transfers that are very close to completion
+                current_time = time.time()
+                last_chunk_time = transfer_info.get('last_chunk_time', current_time)
+                if current_time - last_chunk_time > 5:  # 5 seconds since last chunk
+                    print(f"⚠️ Transfer appears stalled at {progress:.1f}%. Attempting to save...")
+                    result = self._assemble_and_save_file(transfer_id)
+                    print(f"⚠️ Stalled transfer save result: {'SUCCESS' if result else 'FAILED'}")
+            
+            # Update last chunk received time
+            transfer_info['last_chunk_time'] = time.time()
                 
         except Exception as e:
             print(f"Error handling file chunk: {e}")
@@ -401,7 +445,7 @@ class FileTransferManager:
     def _handle_file_complete(self, message: Dict[str, Any], peer_id: str):
         """
         Handle file transfer completion notification.
-        Note: We don't cleanup here to avoid race condition with last chunk processing.
+        This ensures files are saved even if chunk processing didn't trigger it.
         
         Args:
             message: File complete message
@@ -416,17 +460,44 @@ class FileTransferManager:
                 transfer_info = self.active_transfers[transfer_id]
                 if success:
                     print(f"📤 Sender reports successful completion for: {transfer_info.get('filename', 'unknown')}")
-                    # Mark as sender-complete but don't cleanup yet
                     transfer_info['sender_complete'] = True
+                    
+                    # Check if we need to assemble the file (fallback mechanism)
+                    if 'chunks' in transfer_info and transfer_info['chunks']:
+                        progress = (transfer_info.get('bytes_received', 0) / transfer_info.get('file_size', 1)) * 100
+                        print(f"📊 Completion message received - Progress: {progress:.1f}%")
+                        
+                        # Try to save if we haven't already and have substantial data
+                        if progress > 90.0 and not transfer_info.get('file_saved', False):
+                            print(f"🔧 Completion fallback: Attempting to save file...")
+                            result = self._assemble_and_save_file(transfer_id)
+                            if result:
+                                transfer_info['file_saved'] = True
+                                print(f"✅ Completion fallback save: SUCCESS")
+                            else:
+                                print(f"❌ Completion fallback save: FAILED")
+                    
+                    # Schedule cleanup after a delay to allow any pending chunks
+                    def delayed_cleanup():
+                        time.sleep(3)  # Wait 3 seconds
+                        if transfer_id in self.active_transfers:
+                            print(f"🧹 Delayed cleanup of completed transfer: {transfer_id}")
+                            self._cleanup_transfer(transfer_id)
+                    
+                    threading.Thread(target=delayed_cleanup, daemon=True).start()
+                    
                 else:
                     print(f"📤 Sender reports completion with errors for: {transfer_info.get('filename', 'unknown')}")
                     transfer_info['sender_complete'] = False
-                
-                # Don't cleanup here - let receiver cleanup after processing all chunks
-                print(f"🔄 Keeping transfer active to process any remaining chunks...")
+                    # Still try to save what we have
+                    if 'chunks' in transfer_info and transfer_info['chunks']:
+                        print(f"� Error completion: Attempting to save partial file...")
+                        self._assemble_and_save_file(transfer_id)
                 
         except Exception as e:
             print(f"Error handling file completion: {e}")
+            import traceback
+            traceback.print_exc()
     
     def _handle_file_cancel(self, message: Dict[str, Any], peer_id: str):
         """
@@ -601,13 +672,25 @@ class FileTransferManager:
             
             if calculated_hash != expected_hash:
                 print("❌ File integrity check failed! File may be corrupted or tampered with.")
+                print(f"   Expected: {expected_hash}")
+                print(f"   Calculated: {calculated_hash}")
                 print(f"   Saving anyway as partial file for debugging...")
                 # Save with _partial suffix for debugging
                 safe_filename = self._sanitize_filename(f"PARTIAL_{filename}")
                 file_path = self.downloads_dir / safe_filename
+                
+                # Ensure the directory exists before writing
+                file_path.parent.mkdir(parents=True, exist_ok=True)
+                
                 with open(file_path, 'wb') as f:
                     f.write(file_data)
                 print(f"⚠️ Partial file saved for debugging: {file_path}")
+                print(f"📊 Partial file size: {len(file_data)} bytes")
+                
+                # Show notification for partial file
+                if self.notification_manager:
+                    self.notification_manager.notify_file_complete(f"PARTIAL_{filename}", False)
+                
                 return False
             
             print("✅ File integrity verified - SHA-256 hashes match")
@@ -629,9 +712,31 @@ class FileTransferManager:
                 print(f"📁 File exists, trying: {file_path}")
             
             print(f"💾 Writing file to: {file_path}")
-            with open(file_path, 'wb') as f:
-                f.write(file_data)
-            print(f"✅ File write completed")
+            
+            # Ensure the directory exists before writing
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Write file with error handling
+            try:
+                with open(file_path, 'wb') as f:
+                    f.write(file_data)
+                print(f"✅ File write completed")
+                
+                # Verify the file was written correctly
+                if file_path.exists():
+                    actual_size = file_path.stat().st_size
+                    expected_size = len(file_data)
+                    if actual_size == expected_size:
+                        print(f"✅ File verification passed: {actual_size} bytes")
+                    else:
+                        print(f"⚠️ File size mismatch: wrote {expected_size}, got {actual_size}")
+                else:
+                    print(f"❌ File was not created successfully")
+                    return False
+                    
+            except OSError as e:
+                print(f"❌ Failed to write file: {e}")
+                return False
             
             # Sanitize image files
             if self._is_image_file(file_path):
@@ -654,6 +759,10 @@ class FileTransferManager:
             self.network_manager.send_message(
                 transfer_info['peer_id'], 'file_complete', complete_message
             )
+            
+            # Mark as saved to prevent duplicate saves
+            transfer_info['file_saved'] = True
+            transfer_info['save_time'] = time.time()
             
             # Cleanup transfer after successful assembly
             print(f"🧹 Cleaning up transfer after successful file save: {transfer_id}")
@@ -886,6 +995,40 @@ class FileTransferManager:
         for transfer_id in sender_transfers:
             print(f"🧹 Cleaning up completed sender transfer: {transfer_id}")
             self._cleanup_transfer(transfer_id)
+    
+    def check_pending_transfers(self):
+        """
+        Check for transfers that might need to be saved but haven't been processed.
+        This method should be called periodically to catch missed completion signals.
+        """
+        current_time = time.time()
+        
+        for transfer_id, transfer_info in list(self.active_transfers.items()):
+            if transfer_info.get('type') == 'receive' and 'chunks' in transfer_info:
+                # Check if transfer has been stalled
+                last_chunk_time = transfer_info.get('last_chunk_time', transfer_info.get('start_time', current_time))
+                time_since_last_chunk = current_time - last_chunk_time
+                
+                bytes_received = transfer_info.get('bytes_received', 0)
+                file_size = transfer_info.get('file_size', 1)
+                progress = (bytes_received / file_size) * 100
+                
+                # If transfer is nearly complete and hasn't been saved, try to save it
+                if (progress > 95.0 and 
+                    not transfer_info.get('file_saved', False) and 
+                    time_since_last_chunk > 5.0 and  # 5 seconds since last activity
+                    len(transfer_info['chunks']) > 0):
+                    
+                    print(f"🔍 Found stalled transfer: {transfer_info.get('filename', 'unknown')}")
+                    print(f"   Progress: {progress:.1f}%, Time since last chunk: {time_since_last_chunk:.1f}s")
+                    print(f"   Attempting recovery save...")
+                    
+                    result = self._assemble_and_save_file(transfer_id)
+                    if result:
+                        transfer_info['file_saved'] = True
+                        print(f"✅ Recovery save successful")
+                    else:
+                        print(f"❌ Recovery save failed")
 
 
 class FileTransferError(Exception):
