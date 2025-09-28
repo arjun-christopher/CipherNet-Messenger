@@ -27,6 +27,7 @@ from cleanup_manager import comprehensive_cleanup, cleanup_user_chats_on_exit
 class ToolTip:
     """
     Simple tooltip implementation for customtkinter widgets.
+    Automatically matches the app's theme (dark/light mode).
     """
     def __init__(self, widget, text):
         self.widget = widget
@@ -57,12 +58,36 @@ class ToolTip:
         tw.wm_overrideredirect(True)
         tw.wm_geometry(f"+{x}+{y}")
         
-        # Create tooltip content
-        frame = tk.Frame(tw, background="#ffffe0", relief="solid", borderwidth=1)
+        # Get theme colors that match CustomTkinter's appearance
+        appearance_mode = ctk.get_appearance_mode()
+        
+        if appearance_mode == "Dark":
+            # CustomTkinter dark theme colors
+            bg_color = "#212121"      # CTk frame background
+            text_color = "#DCE4EE"    # CTk text color
+            border_color = "#565B5E"  # CTk border color
+            shadow_color = "#0d1117"  # Darker shadow
+        else:
+            # CustomTkinter light theme colors
+            bg_color = "#EBEBEB"      # CTk light frame background
+            text_color = "#000000"    # CTk dark text
+            border_color = "#BDBDBD"  # CTk light border
+            shadow_color = "#C0C0C0"  # Light shadow
+        
+        # Create shadow effect
+        shadow_frame = tk.Frame(tw, background=shadow_color, relief="flat", borderwidth=0)
+        shadow_frame.place(x=2, y=2)
+        
+        # Main tooltip frame
+        frame = tk.Frame(tw, background=bg_color, relief="solid", borderwidth=1, 
+                        highlightbackground=border_color, highlightcolor=border_color, highlightthickness=1)
         frame.pack()
         
-        label = tk.Label(frame, text=self.text, background="#ffffe0", 
-                        font=("Arial", 9), padx=8, pady=4)
+        # Create shadow underneath
+        shadow_frame.configure(width=frame.winfo_reqwidth()+4, height=frame.winfo_reqheight()+4)
+        
+        label = tk.Label(frame, text=self.text, background=bg_color, foreground=text_color,
+                        font=("Segoe UI", 9), padx=12, pady=8, justify="left")
         label.pack()
     
     def _hide_tooltip(self):
@@ -1239,10 +1264,16 @@ class GUIManager:
         )
         self.file_btn.pack(side="left", padx=(0, 5))
         
-        # Add tooltip showing maximum file size
+        # Add tooltip showing maximum file size and allowed extensions
         max_size = self.file_transfer_manager.max_file_size
         max_size_formatted = format_file_size(max_size)
-        tooltip_text = f"Maximum file size: {max_size_formatted}"
+        
+        # Get allowed extensions from file transfer manager
+        allowed_extensions = sorted(list(self.file_transfer_manager.allowed_extensions))
+        # Remove dots and format nicely, group common types
+        extensions_formatted = ", ".join([ext.lstrip('.').upper() for ext in allowed_extensions])
+        
+        tooltip_text = f"📁 Send File\n\n📏 Maximum size: {max_size_formatted}\n📋 Supported formats:\n    {extensions_formatted}"
         ToolTip(self.file_btn, tooltip_text)
         
         # Message entry
