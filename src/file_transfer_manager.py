@@ -368,7 +368,17 @@ class FileTransferManager:
                     break
             
             if receive_transfer_id is None:
-                print(f"❌ No receive transfer found for sender transfer {transfer_id}")
+                # Only log this error occasionally to avoid spam
+                import time
+                current_time = time.time()
+                if not hasattr(self, '_last_chunk_error_log'):
+                    self._last_chunk_error_log = {}
+                
+                # Only log once per minute per transfer ID
+                if (transfer_id not in self._last_chunk_error_log or 
+                    current_time - self._last_chunk_error_log[transfer_id] > 60):
+                    print(f"⚠️ No receive transfer found for sender transfer {transfer_id}")
+                    self._last_chunk_error_log[transfer_id] = current_time
                 return
             
             transfer_info = self.active_transfers[receive_transfer_id]
@@ -985,25 +995,50 @@ class FileTransferManager:
         import time
         current_time = time.time()
         stale_transfers = []
+        orphaned_senders = []
         
         for transfer_id, transfer_info in self.active_transfers.items():
             # Check if transfer has a start time
             start_time = transfer_info.get('start_time', current_time)
             age = current_time - start_time
             
+            # Mark as stale if too old
             if age > max_age_seconds:
                 stale_transfers.append(transfer_id)
-                print(f"🕰️ Found stale transfer: {transfer_id} (age: {age:.1f}s)")
+            
+            # Check for orphaned sender transfers (no corresponding receive transfer)
+            elif (transfer_info.get('type') == 'send' and 
+                  transfer_info.get('status') == 'accepted' and 
+                  age > 60):  # Give 1 minute for receive transfer to be created
+                
+                # Check if there's a corresponding receive transfer
+                has_receive_transfer = any(
+                    t.get('type') == 'receive' and t.get('sender_transfer_id') == transfer_id
+                    for t in self.active_transfers.values()
+                )
+                
+                if not has_receive_transfer:
+                    orphaned_senders.append(transfer_id)
         
         # Clean up stale transfers
         for transfer_id in stale_transfers:
             transfer_info = self.active_transfers.get(transfer_id, {})
-            filename = transfer_info.get('filename', 'unknown')
-            print(f"🧹 Cleaning up stale transfer: {filename} ({transfer_id})")
+            filename = transfer_info.get('filename', transfer_info.get('file_path', {}).get('name', 'unknown'))
+            if stale_transfers:
+                print(f"🧹 Cleaning up stale transfer: {filename} ({transfer_id})")
             self._cleanup_transfer(transfer_id)
         
-        if stale_transfers:
-            print(f"🧹 Cleaned up {len(stale_transfers)} stale transfers")
+        # Clean up orphaned sender transfers
+        for transfer_id in orphaned_senders:
+            transfer_info = self.active_transfers.get(transfer_id, {})
+            filename = transfer_info.get('file_path', {}).get('name', 'unknown')
+            if orphaned_senders:
+                print(f"🧹 Cleaning up orphaned sender transfer: {filename} ({transfer_id})")
+            self._cleanup_transfer(transfer_id)
+        
+        total_cleaned = len(stale_transfers) + len(orphaned_senders)
+        if total_cleaned > 0:
+            print(f"🧹 Cleaned up {total_cleaned} transfers ({len(stale_transfers)} stale, {len(orphaned_senders)} orphaned)")
     
     def cleanup_sender_transfers(self):
         """
@@ -1024,7 +1059,12 @@ class FileTransferManager:
         Force completion of pending receive transfers that might be stuck.
         This checks for transfers that have received all expected bytes but haven't been saved.
         """
-        print(f"🔍 Checking for pending transfers that can be force-completed...")
+        # Only log if there are actually pending transfers
+        pending_count = sum(1 for t in self.active_transfers.values() 
+                          if t.get('type') == 'receive' and not t.get('file_saved', False))
+        
+        if pending_count > 0:
+            print(f"🔍 Checking {pending_count} pending transfers for completion...")
         
         for transfer_id, transfer_info in list(self.active_transfers.items()):
             if (transfer_info.get('type') == 'receive' and 
@@ -1092,18 +1132,19 @@ class FileTransferManager:
         def monitor_transfers():
             while True:
                 try:
-                    time.sleep(5)  # Check every 5 seconds
+                    time.sleep(15)  # Check every 15 seconds instead of 5
                     
-                    # Force complete any pending transfers
-                    self.force_complete_pending_transfers()
-                    
-                    # Clean up stale transfers (older than 5 minutes)
-                    self.cleanup_stale_transfers(max_age_seconds=300)
-                    
-                    # Print statistics if there are active transfers (for debugging)
+                    # Only run monitoring if there are active transfers
                     if self.active_transfers:
+                        # Force complete any pending transfers
+                        self.force_complete_pending_transfers()
+                        
+                        # Clean up stale transfers (older than 5 minutes)
+                        self.cleanup_stale_transfers(max_age_seconds=300)
+                        
+                        # Print statistics only if there are issues
                         stats = self.get_transfer_statistics()
-                        if stats['pending_assembly'] > 0:
+                        if stats['pending_assembly'] > 0 or stats['total_transfers'] > 10:
                             print(f"📊 Transfer stats: {stats['pending_assembly']} pending assembly, "
                                   f"{stats['files_saved']} files saved, {stats['total_transfers']} total")
                     
@@ -1113,7 +1154,9 @@ class FileTransferManager:
         # Start monitor thread
         monitor_thread = threading.Thread(target=monitor_transfers, daemon=True)
         monitor_thread.start()
-        print("🔄 Transfer monitor started")
+        # Only print startup message in debug mode
+        if self.config.get('debug.verbose_logging', False):
+            print("🔄 Transfer monitor started")
 
 
 class FileTransferError(Exception):
