@@ -24,6 +24,84 @@ from notification_manager import NotificationManager
 from cleanup_manager import comprehensive_cleanup, cleanup_user_chats_on_exit
 
 
+class ToolTip:
+    """
+    Simple tooltip implementation for customtkinter widgets.
+    """
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tooltip_window = None
+        self.widget.bind('<Enter>', self._on_enter)
+        self.widget.bind('<Leave>', self._on_leave)
+        self.widget.bind('<Motion>', self._on_motion)
+    
+    def _on_enter(self, event=None):
+        self._show_tooltip()
+    
+    def _on_leave(self, event=None):
+        self._hide_tooltip()
+    
+    def _on_motion(self, event=None):
+        if self.tooltip_window:
+            self._update_tooltip_position()
+    
+    def _show_tooltip(self):
+        if self.tooltip_window or not self.text:
+            return
+        
+        x = self.widget.winfo_rootx() + 25
+        y = self.widget.winfo_rooty() + 25
+        
+        self.tooltip_window = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry(f"+{x}+{y}")
+        
+        # Create tooltip content
+        frame = tk.Frame(tw, background="#ffffe0", relief="solid", borderwidth=1)
+        frame.pack()
+        
+        label = tk.Label(frame, text=self.text, background="#ffffe0", 
+                        font=("Arial", 9), padx=8, pady=4)
+        label.pack()
+    
+    def _hide_tooltip(self):
+        if self.tooltip_window:
+            self.tooltip_window.destroy()
+            self.tooltip_window = None
+    
+    def _update_tooltip_position(self):
+        if self.tooltip_window:
+            x = self.widget.winfo_rootx() + 25
+            y = self.widget.winfo_rooty() + 25
+            self.tooltip_window.wm_geometry(f"+{x}+{y}")
+
+
+def format_file_size(size_bytes):
+    """
+    Format file size in bytes to human-readable format.
+    
+    Args:
+        size_bytes: Size in bytes
+        
+    Returns:
+        Formatted string (e.g., "100 MB", "1.5 GB")
+    """
+    if size_bytes == 0:
+        return "0 B"
+    
+    size_names = ["B", "KB", "MB", "GB", "TB"]
+    i = int(math.floor(math.log(size_bytes, 1024)))
+    p = math.pow(1024, i)
+    s = round(size_bytes / p, 2)
+    
+    # Remove unnecessary decimal places
+    if s == int(s):
+        s = int(s)
+    
+    return f"{s} {size_names[i]}"
+
+
 class GUIManager:
     """Manages the graphical user interface for CipherNet Messenger."""
     
@@ -1160,6 +1238,12 @@ class GUIManager:
             state="disabled"  # Disabled until session established
         )
         self.file_btn.pack(side="left", padx=(0, 5))
+        
+        # Add tooltip showing maximum file size
+        max_size = self.file_transfer_manager.max_file_size
+        max_size_formatted = format_file_size(max_size)
+        tooltip_text = f"Maximum file size: {max_size_formatted}"
+        ToolTip(self.file_btn, tooltip_text)
         
         # Message entry
         self.message_entry = ctk.CTkEntry(
