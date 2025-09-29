@@ -33,6 +33,9 @@ class FileTransferManager:
         self.active_transfers = {}  # {transfer_id: transfer_info}
         self.transfer_callbacks = {}  # {transfer_id: callback}
         
+        # Track corruption alerts to prevent spam
+        self.corruption_alerts_sent = set()  # Track transfer_ids that already had corruption alerts
+        
         # Allowed file types for security
         self.allowed_extensions = {
             '.txt', '.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.gif',
@@ -684,31 +687,39 @@ class FileTransferManager:
                 print("🛡️  For security reasons, corrupted file will NOT be saved.")
                 print("🚨 This could indicate a SHA256 bypass attack in progress!")
                 
-                # Show security alert in GUI
-                corruption_message = (
-                    f"🚨 SECURITY ALERT: File Corruption Detected!\n\n"
-                    f"File: {filename}\n"
-                    f"Size: {len(file_data):,} bytes\n\n"
-                    f"The received file failed integrity verification.\n"
-                    f"This could indicate:\n"
-                    f"• File corruption during transfer\n"
-                    f"• Malicious tampering or attack\n"
-                    f"• SHA256 bypass attack in progress\n\n"
-                    f"🛡️ For your security, the file was NOT saved.\n\n"
-                    f"Expected hash: {expected_hash}\n"
-                    f"Received hash: {calculated_hash}"
-                )
-                
-                # Show alert in GUI if available
-                if hasattr(self, 'gui_manager') and self.gui_manager:
-                    self.gui_manager.show_security_alert(corruption_message)
-                
-                # Also trigger notification
-                if hasattr(self, 'notification_manager') and self.notification_manager:
-                    self.notification_manager.show_notification(
-                        "Security Alert: File Corruption",
-                        f"File '{filename}' failed integrity check and was rejected for security."
+                # Only show alerts once per transfer to prevent spam
+                if transfer_id not in self.corruption_alerts_sent:
+                    self.corruption_alerts_sent.add(transfer_id)
+                    
+                    # Show security alert in GUI
+                    corruption_message = (
+                        f"🚨 SECURITY ALERT: File Corruption Detected!"
+                        f"File: {filename}"
+                        f"Size: {len(file_data):,} bytes"
+                        f"The received file failed integrity verification."
+                        f"This could indicate:"
+                        f"• File corruption during transfer"
+                        f"• Malicious tampering or attack"
+                        f"• SHA256 bypass attack in progress"
+                        f"🛡️ For your security, the file was NOT saved."
+                        f"Expected hash: {expected_hash}"
+                        f"Received hash: {calculated_hash}"
                     )
+                    
+                    # Show alert in GUI if available
+                    if hasattr(self, 'gui_manager') and self.gui_manager:
+                        self.gui_manager.show_security_alert(corruption_message)
+                    
+                    # Also trigger notification
+                    if hasattr(self, 'notification_manager') and self.notification_manager:
+                        self.notification_manager.show_notification(
+                            "Security Alert: File Corruption",
+                            f"File '{filename}' failed integrity check and was rejected for security."
+                        )
+                        
+                    print("🚨 Security alerts sent (once per transfer to prevent spam)")
+                else:
+                    print("🔇 Corruption detected again - alerts already sent for this transfer")
                 
                 return False
             
@@ -951,6 +962,10 @@ class FileTransferManager:
         
         if transfer_id in self.transfer_callbacks:
             del self.transfer_callbacks[transfer_id]
+            
+        # Clean up corruption alert tracking to prevent memory leaks
+        if transfer_id in self.corruption_alerts_sent:
+            self.corruption_alerts_sent.remove(transfer_id)
     
     def save_incomplete_transfers(self):
         """

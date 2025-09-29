@@ -42,6 +42,10 @@ class CryptographyManager:
         self.peer_public_keys = {}  # Store peer public keys {peer_id: RSA_key}
         self.session_keys = {}  # Store session keys {peer_id: session_key}
         self.session_metadata = {}  # Store session info {peer_id: metadata}
+        
+        # Rate limiting for attack alerts to prevent console spam
+        self._last_attack_alert_time = {}  # {attack_type: timestamp}
+        self._attack_alert_cooldown = 5.0  # 5 seconds between same attack alerts
     
     def generate_rsa_keypair(self) -> Tuple[bytes, bytes]:
         """
@@ -324,11 +328,18 @@ class CryptographyManager:
             # Apply HMAC tampering hook if active (for attack demonstration)
             processed_message, hmac_digest = hooks.hmac_message_hook(key, message_bytes)
             
-            # Check if HMAC was tampered (invalid HMAC generated)
+            # Check if HMAC was tampered (invalid HMAC generated) with rate limiting
             if hmac_digest == b'\x00' * 32:  # Invalid HMAC from attack
-                print(f"🚨 HMAC TAMPERING ATTACK DETECTED!")
-                print(f"⚠️  WARNING: Message authentication will FAIL at recipient!")
-                print(f"⚠️  MESSAGE WILL BE REJECTED as potentially compromised!")
+                current_time = time.time()
+                last_alert = self._last_attack_alert_time.get('hmac_tamper', 0)
+                
+                # Only show alert if enough time has passed (prevent spam)
+                if current_time - last_alert > self._attack_alert_cooldown:
+                    print(f"🚨 HMAC TAMPERING ATTACK DETECTED!")
+                    print(f"⚠️  WARNING: Message authentication will FAIL at recipient!")
+                    print(f"⚠️  MESSAGE WILL BE REJECTED as potentially compromised!")
+                    print(f"🔇 (Further HMAC attack alerts rate-limited for {self._attack_alert_cooldown}s)")
+                    self._last_attack_alert_time['hmac_tamper'] = current_time
                 # Return the invalid HMAC - this will cause verification to fail
                 return hmac_digest
             else:
@@ -414,11 +425,18 @@ class CryptographyManager:
             # Apply SHA256 bypass hook if active (for attack demonstration)
             processed_data, returned_hash = hooks.sha256_file_hook(data, expected_hash)
             
-            # Check if hash was compromised
+            # Check if hash was compromised (with rate limiting for console spam)
             if returned_hash.startswith("deadbeef"):  # Fake hash from attack
-                print(f"🚨 SHA256 BYPASS ATTACK DETECTED on data!")
-                print(f"⚠️  WARNING: Data integrity verification will FAIL!")
-                print(f"⚠️  DATA WILL BE REJECTED as corrupted!")
+                current_time = time.time()
+                last_alert = self._last_attack_alert_time.get('sha256_bypass', 0)
+                
+                # Only show alert if enough time has passed (prevent spam)
+                if current_time - last_alert > self._attack_alert_cooldown:
+                    print(f"🚨 SHA256 BYPASS ATTACK DETECTED on data!")
+                    print(f"⚠️  WARNING: Data integrity verification will FAIL!")
+                    print(f"⚠️  DATA WILL BE REJECTED as corrupted!")
+                    print(f"🔇 (Further SHA256 attack alerts rate-limited for {self._attack_alert_cooldown}s)")
+                    self._last_attack_alert_time['sha256_bypass'] = current_time
                 # Return the fake hash - this will cause integrity check to fail
             
             return returned_hash
