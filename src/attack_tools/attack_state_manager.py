@@ -11,7 +11,6 @@ import os
 from pathlib import Path
 import threading
 import time
-from . import hooks
 
 # Attack state file path
 ATTACK_STATE_FILE = Path(__file__).parent / "attack_state.json"
@@ -70,11 +69,6 @@ class AttackStateManager:
         with self._lock:
             self._last_check = current_time
             state = self._load_state()
-            
-            # Update global hook variables
-            hooks.HOOK_RSA_MITM_ACTIVE = state.get('rsa_mitm_active', False)
-            hooks.HOOK_HMAC_TAMPER_ACTIVE = state.get('hmac_tamper_active', False)
-            hooks.HOOK_SHA256_BYPASS_ACTIVE = state.get('sha256_bypass_active', False)
     
     def set_attack_state(self, attack_type, active):
         """Set attack state and save to file."""
@@ -89,22 +83,14 @@ class AttackStateManager:
                 state['sha256_bypass_active'] = active
             
             self._save_state(state)
-            
-            # Also update current process immediately
-            if attack_type == 'rsa_mitm':
-                hooks.HOOK_RSA_MITM_ACTIVE = active
-            elif attack_type == 'hmac_tamper':
-                hooks.HOOK_HMAC_TAMPER_ACTIVE = active
-            elif attack_type == 'sha256_bypass':
-                hooks.HOOK_SHA256_BYPASS_ACTIVE = active
     
     def get_attack_states(self):
         """Get current attack states."""
         state = self._load_state()
         return {
-            'rsa_mitm': state.get('rsa_mitm_active', False),
-            'hmac_tamper': state.get('hmac_tamper_active', False),
-            'sha256_bypass': state.get('sha256_bypass_active', False)
+            'rsa_mitm_active': state.get('rsa_mitm_active', False),
+            'hmac_tamper_active': state.get('hmac_tamper_active', False),
+            'sha256_bypass_active': state.get('sha256_bypass_active', False)
         }
 
 # Global instance

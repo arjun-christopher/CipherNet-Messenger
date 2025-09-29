@@ -1,7 +1,16 @@
 """
-CipherNet-Messenger Attack Hooks Module
-
-This file contains cryptographic attack implementations used for security testing
+CipherNet-Messenger Attack Hooks Moddef _get_attack_state(attack_name):
+    \"\"\"Get current attack state from JSON file.\"\"\"
+    try:
+        states = get_attack_states()
+        # Debug: print what we got
+        print(f"[DEBUG] _get_attack_state('{attack_name}') - states: {states}")
+        result = states.get(attack_name, False)
+        print(f"[DEBUG] _get_attack_state('{attack_name}') - result: {result}")
+        return result
+    except Exception as e:
+        print(f"[DEBUG] _get_attack_state('{attack_name}') - exception: {e}")
+        return FalseThis file contains cryptographic attack implementations used for security testing
 and educational purposes. It provides hook functions that can be activated to
 demonstrate various attack vectors against cryptographic protocols:
 
@@ -26,19 +35,26 @@ from Crypto.Hash import HMAC, SHA256
 
 # Import state manager with error handling for different execution contexts
 try:
-    from .attack_state_manager import update_attack_states
+    from .attack_state_manager import get_attack_states
 except ImportError:
     try:
-        from attack_state_manager import update_attack_states
+        from attack_state_manager import get_attack_states
     except ImportError:
         # Fallback if state manager isn't available
-        def update_attack_states():
-            pass
+        def get_attack_states():
+            return {
+                'rsa_mitm_active': False,
+                'hmac_tamper_active': False,
+                'sha256_bypass_active': False
+            }
 
-# Global flags: UI sets these to activate specific attack vectors!
-HOOK_RSA_MITM_ACTIVE = False      # Enables RSA Man-in-the-Middle attack
-HOOK_HMAC_TAMPER_ACTIVE = False   # Enables HMAC message tampering attack
-HOOK_SHA256_BYPASS_ACTIVE = False  # Enables SHA256 hash collision/bypass attack
+def _get_attack_state(attack_name):
+    """Get current attack state from JSON file."""
+    try:
+        states = get_attack_states()
+        return states.get(attack_name, False)
+    except Exception:
+        return False
 
 def rsa_key_exchange_hook(victim_pubkey, session_key):
     """
@@ -66,10 +82,8 @@ def rsa_key_exchange_hook(victim_pubkey, session_key):
     
     Returns: (encrypted_session_key, attacker_key or None)
     """
-    # Update attack states from shared file
-    update_attack_states()
-    
-    if HOOK_RSA_MITM_ACTIVE:
+    # Check if RSA MITM attack is active
+    if _get_attack_state('rsa_mitm_active'):
         print("[RSA MITM ATTACK] Intercepting key exchange!")
         print("[RSA MITM] Generating malicious key pair...")
         
@@ -90,7 +104,13 @@ def rsa_key_exchange_hook(victim_pubkey, session_key):
         return encrypted, attacker_key
     else:
         # Normal operation: encrypt with legitimate victim's public key
-        cipher = PKCS1_OAEP.new(victim_pubkey)
+        # Handle both RSA key objects and PEM bytes
+        if isinstance(victim_pubkey, bytes):
+            victim_key_obj = RSA.import_key(victim_pubkey)
+        else:
+            victim_key_obj = victim_pubkey
+            
+        cipher = PKCS1_OAEP.new(victim_key_obj)
         encrypted = cipher.encrypt(session_key)
         return encrypted, None
 
@@ -125,10 +145,8 @@ def hmac_message_hook(key, message):
     
     Returns: (message_to_send, hmac_to_send)
     """
-    # Update attack states from shared file
-    update_attack_states()
-    
-    if HOOK_HMAC_TAMPER_ACTIVE:
+    # Check if HMAC tampering attack is active
+    if _get_attack_state('hmac_tamper_active'):
         print("[HMAC TAMPERING ATTACK] Intercepting message authentication!")
         
         # ATTACK: Generate invalid HMAC that will cause verification to fail
@@ -190,10 +208,8 @@ def sha256_file_hook(file_bytes, expected_hash):
     
     Returns: (file_bytes_to_send, hash_to_send)
     """
-    # Update attack states from shared file
-    update_attack_states()
-    
-    if HOOK_SHA256_BYPASS_ACTIVE:
+    # Check if SHA256 bypass attack is active
+    if _get_attack_state('sha256_bypass_active'):
         print("[SHA256 BYPASS ATTACK] Intercepting file integrity check!")
         
         # ATTACK: Return completely wrong hash that will cause verification to fail
