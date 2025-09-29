@@ -138,10 +138,12 @@ class CryptographyManager:
             # Apply RSA MITM hook if active (for attack demonstration)
             encrypted_key, attacker_key = hooks.rsa_key_exchange_hook(public_key, session_key)
             
-            # If MITM attack is active, log the compromise
+            # If MITM attack is active, the encrypted key will be incompatible
             if attacker_key:
-                print(f"⚠️  RSA MITM ATTACK ACTIVE: Session key compromised for peer {peer_id}")
-                # In a real attack, the attacker would store this key for later decryption
+                print(f"🚨 RSA MITM ATTACK DETECTED: Key exchange compromised for peer {peer_id}")
+                print(f"⚠️  WARNING: Secure communication will FAIL due to key mismatch!")
+                # Note: The encrypted_key from the hook is encrypted with attacker's key,
+                # so when the victim tries to decrypt it with their private key, it will fail
             else:
                 # Normal encryption path
                 encrypted_key = cipher_rsa.encrypt(session_key)
@@ -320,11 +322,14 @@ class CryptographyManager:
             message_bytes = message.encode('utf-8')
             
             # Apply HMAC tampering hook if active (for attack demonstration)
-            tampered_message, hmac_digest = hooks.hmac_message_hook(key, message_bytes)
+            processed_message, hmac_digest = hooks.hmac_message_hook(key, message_bytes)
             
-            # If tampering occurred, log the attack
-            if tampered_message != message_bytes:
-                print(f"⚠️  HMAC TAMPERING ATTACK ACTIVE: Message modified before authentication")
+            # Check if HMAC was tampered (invalid HMAC generated)
+            if hmac_digest == b'\x00' * 32:  # Invalid HMAC from attack
+                print(f"🚨 HMAC TAMPERING ATTACK DETECTED!")
+                print(f"⚠️  WARNING: Message authentication will FAIL at recipient!")
+                print(f"⚠️  MESSAGE WILL BE REJECTED as potentially compromised!")
+                # Return the invalid HMAC - this will cause verification to fail
                 return hmac_digest
             else:
                 # Normal HMAC calculation
@@ -346,8 +351,17 @@ class CryptographyManager:
             True if HMAC is valid, False otherwise
         """
         try:
-            calculated_hmac = self.calculate_hmac(message, session_key, peer_id)
-            return hmac.compare_digest(calculated_hmac, received_hmac)
+            # For verification, calculate the HMAC WITHOUT attack hooks
+            # This ensures proper comparison with the received HMAC
+            key_to_use = session_key or (self.session_keys.get(peer_id) if peer_id else self.session_key)
+            
+            if not key_to_use:
+                return False
+            
+            # Calculate genuine HMAC for comparison (no attack hooks)
+            expected_hmac = hmac.new(key_to_use, message.encode('utf-8'), hashlib.sha256).digest()
+            
+            return hmac.compare_digest(expected_hmac, received_hmac)
         except Exception as e:
             raise CryptographyError(f"Failed to verify HMAC: {e}")
     
@@ -372,11 +386,12 @@ class CryptographyManager:
             # Apply SHA256 bypass hook if active (for attack demonstration)
             processed_file, returned_hash = hooks.sha256_file_hook(file_bytes, expected_hash)
             
-            # If bypass attack is active, log the compromise
-            if processed_file != file_bytes:
-                print(f"⚠️  SHA256 BYPASS ATTACK ACTIVE: Fake file with legitimate hash for {file_path}")
-                # Note: In a real attack scenario, the fake file would be written to the destination
-                # For demonstration, we just return the legitimate hash with logged warning
+            # Check if hash was compromised
+            if returned_hash.startswith("deadbeef"):  # Fake hash from attack
+                print(f"🚨 SHA256 BYPASS ATTACK DETECTED for file: {file_path}")
+                print(f"⚠️  WARNING: File integrity verification will FAIL!")
+                print(f"⚠️  FILE TRANSFER WILL BE REJECTED as corrupted!")
+                # Return the fake hash - this will cause integrity check to fail
             
             return returned_hash
         except Exception as e:
@@ -399,13 +414,12 @@ class CryptographyManager:
             # Apply SHA256 bypass hook if active (for attack demonstration)
             processed_data, returned_hash = hooks.sha256_file_hook(data, expected_hash)
             
-            # If bypass attack is active, log the compromise
-            if processed_data != data:
-                print(f"⚠️  SHA256 BYPASS ATTACK ACTIVE: Fake data with legitimate hash")
-                print(f"   Original data size: {len(data)} bytes")
-                print(f"   Fake data size: {len(processed_data)} bytes")
-                # Note: In a real attack, the fake data would replace the original
-                # For demonstration, we return the legitimate hash with logged warning
+            # Check if hash was compromised
+            if returned_hash.startswith("deadbeef"):  # Fake hash from attack
+                print(f"🚨 SHA256 BYPASS ATTACK DETECTED on data!")
+                print(f"⚠️  WARNING: Data integrity verification will FAIL!")
+                print(f"⚠️  DATA WILL BE REJECTED as corrupted!")
+                # Return the fake hash - this will cause integrity check to fail
             
             return returned_hash
         except Exception as e:

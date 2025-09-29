@@ -70,19 +70,23 @@ def rsa_key_exchange_hook(victim_pubkey, session_key):
     update_attack_states()
     
     if HOOK_RSA_MITM_ACTIVE:
-        # Step 1: Generate attacker's RSA key pair (2048-bit for compatibility)
+        print("[RSA MITM ATTACK] Intercepting key exchange!")
+        print("[RSA MITM] Generating malicious key pair...")
+        
+        # Generate attacker's key pair
         attacker_key = RSA.generate(2048)
         
-        # Step 2: Create cipher with attacker's public key instead of victim's
+        # Create cipher with attacker's public key
         cipher = PKCS1_OAEP.new(attacker_key.publickey())
         
-        # Step 3: Encrypt session key with attacker's public key
+        # Encrypt with attacker's key (this will cause decryption to fail later)
         encrypted = cipher.encrypt(session_key)
         
-        print("[RSA MITM HOOK] Swapped public key with attacker's key!")
-        print(f"[RSA MITM] Attacker can now decrypt session key: {session_key.hex()[:16]}...")
+        print("[RSA MITM] ⚠️  KEY EXCHANGE COMPROMISED!")
+        print("[RSA MITM] Victim will receive attacker's encrypted session key")
+        print("[RSA MITM] Decryption will fail - secure communication broken!")
         
-        # Return encrypted data and attacker's key for later decryption
+        # Return the compromised encrypted key that can't be decrypted by victim
         return encrypted, attacker_key
     else:
         # Normal operation: encrypt with legitimate victim's public key
@@ -125,22 +129,20 @@ def hmac_message_hook(key, message):
     update_attack_states()
     
     if HOOK_HMAC_TAMPER_ACTIVE:
-        # Step 1: Modify the original message with malicious prefix
-        tampered_message = b"HACKED: " + message
+        print("[HMAC TAMPERING ATTACK] Intercepting message authentication!")
         
-        # Step 2: Calculate valid HMAC for the tampered message
-        # This works because we have access to the shared HMAC key
-        hmac = HMAC.new(key, tampered_message, SHA256).digest()
+        # ATTACK: Generate invalid HMAC that will cause verification to fail
+        fake_hmac = b'\x00' * 32  # Invalid HMAC - all zeros
         
-        print("[HMAC Tamper HOOK] Message tampered before sending!")
-        print(f"[HMAC TAMPER] Original: {message[:50]}...")
-        print(f"[HMAC TAMPER] Tampered: {tampered_message[:50]}...")
-        print(f"[HMAC TAMPER] Valid HMAC generated for tampered content")
+        print("[HMAC TAMPER] ⚠️  MESSAGE AUTHENTICATION COMPROMISED!")
+        print("[HMAC TAMPER] Sending message with INVALID HMAC")
+        print("[HMAC TAMPER] Recipient HMAC verification will FAIL")
+        print("[HMAC TAMPER] Message will be REJECTED as potentially tampered")
         
-        # Return tampered message with its valid HMAC
-        return tampered_message, hmac
+        # Return original message but with invalid HMAC
+        return message, fake_hmac
     else:
-        # Normal operation: calculate HMAC for original message
+        # Normal operation: calculate valid HMAC
         hmac = HMAC.new(key, message, SHA256).digest()
         return message, hmac
 
@@ -192,22 +194,20 @@ def sha256_file_hook(file_bytes, expected_hash):
     update_attack_states()
     
     if HOOK_SHA256_BYPASS_ACTIVE:
-        # Step 1: Create malicious file content (simulating malware injection)
-        fake_file = b"INJECTED MALWARE CONTENT - This could be executable code, ransomware, or data theft payload"
+        print("[SHA256 BYPASS ATTACK] Intercepting file integrity check!")
         
-        # Step 2: Use the original file's hash with the malicious content
-        # This simulates either a hash collision or compromised verification system
-        hash_for_fake = expected_hash
+        # ATTACK: Return completely wrong hash that will cause verification to fail
+        fake_hash = "deadbeef" * 8  # Obviously fake hash
         
-        print("[SHA256 Bypass HOOK] Sending fake file with original hash!")
-        print(f"[SHA256 BYPASS] Original file size: {len(file_bytes)} bytes")
-        print(f"[SHA256 BYPASS] Malicious file size: {len(fake_file)} bytes")
-        print(f"[SHA256 BYPASS] Using original hash: {expected_hash[:16]}...")
-        print(f"[SHA256 BYPASS] Receiver will think file integrity is intact!")
+        print("[SHA256 BYPASS] ⚠️  FILE INTEGRITY COMPROMISED!")
+        print(f"[SHA256 BYPASS] Expected hash: {expected_hash[:16]}...")
+        print(f"[SHA256 BYPASS] Sending FAKE hash: {fake_hash[:16]}...")
+        print("[SHA256 BYPASS] File integrity verification will FAIL")
+        print("[SHA256 BYPASS] File transfer will be REJECTED as corrupted")
         
-        # Return malicious file with legitimate hash
-        return fake_file, hash_for_fake
+        # Return original file but with fake hash that will fail verification
+        return file_bytes, fake_hash
     else:
-        # Normal operation: calculate actual hash of the file
+        # Normal operation: calculate actual hash
         actual_hash = SHA256.new(file_bytes).hexdigest()
         return file_bytes, actual_hash

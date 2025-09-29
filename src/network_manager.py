@@ -526,7 +526,16 @@ class NetworkManager:
                 
                 # Verify HMAC
                 if not self.crypto_manager.verify_hmac(decrypted_json, received_hmac, peer_id=peer_id):
-                    print(f"HMAC verification failed for message from {peer_id}")
+                    print(f"🚨 SECURITY ALERT: HMAC verification failed for message from {peer_id}")
+                    print(f"⚠️  This could indicate a TAMPERING ATTACK or message corruption!")
+                    print(f"⚠️  Message REJECTED for security reasons!")
+                    
+                    # Show security alert in GUI if available
+                    if hasattr(self, 'gui_manager') and self.gui_manager:
+                        self.gui_manager.show_security_alert(
+                            f"Security Alert: Message from {peer_id} failed authentication check. "
+                            f"This could indicate a tampering attack. Message was rejected."
+                        )
                     return
                 
                 # Parse decrypted message
