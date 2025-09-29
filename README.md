@@ -89,6 +89,12 @@ User A ←→ Firebase (Auth/Discovery) ←→ User B
 4. Session key encrypted with RSA and shared
 5. All messages encrypted with Blowfish using shared session key
 
+### Attack Prevention & Detection
+- **MITM Attack Prevention**: RSA key exchange failures automatically prevent session establishment
+- **UI Security Alerts**: Failed attacks trigger immediate user warnings and disable unsafe communication
+- **Notification Rate Limiting**: Corrupted file alerts are rate-limited to prevent spam
+- **Real-time Attack Detection**: System monitors attack states and responds accordingly
+
 ## Attack Tools & Security Testing
 
 CipherNet Messenger includes an integrated **Attack Tools System** for educational purposes and security testing. This system demonstrates common cryptographic vulnerabilities and attack vectors that secure messaging applications must defend against.
@@ -98,8 +104,11 @@ CipherNet Messenger includes an integrated **Attack Tools System** for education
 The attack tools provide real-time demonstrations of:
 
 - **RSA Man-in-the-Middle (MITM)**: Intercepts RSA key exchanges and substitutes attacker-controlled keys
-- **HMAC Message Tampering**: Modifies message content while maintaining valid authentication signatures  
+  - *Prevention*: Session establishment fails with clear UI warnings when MITM detected
+- **HMAC Message Tampering**: Modifies message content while maintaining valid authentication signatures
+  - *Prevention*: Rate-limited console alerts prevent attack notification spam
 - **SHA256 Hash Bypass**: Replaces file content while preserving original integrity hashes
+  - *Prevention*: Corrupted files trigger single alerts per transfer, preventing UI spam
 
 ### Attack Control Panel
 
@@ -123,10 +132,15 @@ Normal Operation:
 Message → Encryption → HMAC → Network → Decryption → Verification
 
 With Attacks Active:
-Message → [ATTACK HOOK] → Modified → Network → [Appears Legitimate]
+Message → [ATTACK HOOK] → Modified → Network → [Detection & Prevention]
+
+Attack Prevention Flow:
+Attack Detected → Session Blocked → UI Alert → User Protected
 
 Cross-Process Communication:
 Attack UI Process ←→ attack_state.json ←→ Main Messenger Process
+                                          ↓
+                                  Attack Detection & UI Alerts
 ```
 
 The attack hooks are seamlessly integrated into the core cryptographic operations:
@@ -139,9 +153,11 @@ The attack hooks are seamlessly integrated into the core cryptographic operation
 
 This system demonstrates:
 - **Why end-to-end encryption matters**: Shows how MITM attacks compromise communication
-- **Message authentication importance**: Illustrates tampering without detection
-- **File integrity verification**: Shows hash collision/bypass vulnerabilities
-- **Real-world attack scenarios**: Provides hands-on security education
+- **Attack prevention mechanisms**: Illustrates how proper security prevents attacks from succeeding
+- **Message authentication importance**: Shows tampering detection and prevention
+- **File integrity verification**: Demonstrates hash collision/bypass vulnerabilities and defenses
+- **User interface security**: Shows how UI alerts protect users from compromised sessions
+- **Real-world attack scenarios**: Provides hands-on security education with prevention awareness
 
 ### Ethical Use Warning
 

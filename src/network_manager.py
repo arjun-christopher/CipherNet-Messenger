@@ -852,21 +852,23 @@ class NetworkManager:
                     print(f"🚨 RSA MITM ATTACK CONFIRMED! Attack is currently active.")
                     print(f"🚨 Key exchange compromised - session cannot be established!")
                     error_msg = '''🚨 MITM ATTACK DETECTED!
-                    
-                    The key exchange has been compromised by a Man-in-the-Middle attack.
-                    Secure communication cannot be established.
-                    ⚠️ This connection is NOT SAFE!'''
+
+                                The key exchange has been compromised by a Man-in-the-Middle attack.
+                                Secure communication cannot be established.
+                                
+                                ⚠️ This connection is NOT SAFE!'''
                 else:
                     print(f"🚨 RSA decryption failed from peer {peer_id}: {decrypt_error}")
                     print(f"🚨 POSSIBLE RSA MITM ATTACK OR KEY MISMATCH!")
                     error_msg = f'''RSA Key Exchange Failed!
-                    Unable to decrypt session key.
-                    Possible causes:
-                    • RSA MITM Attack
-                    • Key corruption
-                    • Protocol mismatch
+                                
+                                Unable to decrypt session key.
+                                Possible causes:
+                                • RSA MITM Attack
+                                • Key corruption
+                                • Protocol mismatch
                     
-                    Error: {str(decrypt_error)}'''
+                                Error: {str(decrypt_error)}'''
                 
                 # Call failure callback if registered
                 if peer_id in self.session_establishment_callbacks:
