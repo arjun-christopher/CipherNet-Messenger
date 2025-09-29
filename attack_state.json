@@ -1,0 +1,5 @@
+{
+    "rsa_mitm": false,
+    "hmac_tamper": false,
+    "sha256_bypass": false
+}
