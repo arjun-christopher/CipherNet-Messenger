@@ -693,17 +693,15 @@ class FileTransferManager:
                     
                     # Show security alert in GUI
                     corruption_message = (
-                        f"🚨 SECURITY ALERT: File Corruption Detected!"
-                        f"File: {filename}"
-                        f"Size: {len(file_data):,} bytes"
-                        f"The received file failed integrity verification."
-                        f"This could indicate:"
-                        f"• File corruption during transfer"
-                        f"• Malicious tampering or attack"
-                        f"• SHA256 bypass attack in progress"
-                        f"🛡️ For your security, the file was NOT saved."
-                        f"Expected hash: {expected_hash}"
-                        f"Received hash: {calculated_hash}"
+                        f'''🚨 SECURITY ALERT: File Corruption Detected!
+                        File: {filename}
+                        Size: {len(file_data):,} bytes
+                        The received file failed integrity verification.
+                        This could indicate:
+                        • File corruption during transfer
+                        • Malicious tampering or attack
+                        • SHA256 bypass attack in progress
+                        🛡️ For your security, the file was NOT saved'''
                     )
                     
                     # Show alert in GUI if available
