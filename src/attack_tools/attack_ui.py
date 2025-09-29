@@ -32,9 +32,19 @@ import customtkinter as ctk
 import sys
 import os
 
-# Import hooks and global flags
+# Import hooks and state management
 sys.path.append(os.path.dirname(__file__))
 import hooks
+
+# Import state manager with error handling
+try:
+    from attack_state_manager import set_attack_state, get_attack_states
+except ImportError:
+    # Fallback functions if state manager isn't available
+    def set_attack_state(attack_type, active):
+        pass
+    def get_attack_states():
+        return {'rsa_mitm': False, 'hmac_tamper': False, 'sha256_bypass': False}
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("dark-blue")
@@ -76,23 +86,50 @@ class AttackControlUI(ctk.CTk):
         self.info_box = ctk.CTkTextbox(self, width=380, height=80, fg_color="#1a0000", text_color="#ff3c3c")
         self.info_box.pack(pady=10)
         self.info_box.insert("0.0", "Use switches to enable/disable real-time attacks. Messenger must call hooks.py functions.")
+        
+        # Load current attack states from shared file and update UI
+        self.load_current_states()
 
     def toggle_rsa(self):
-        hooks.HOOK_RSA_MITM_ACTIVE = self.rsa_var.get()
+        active = self.rsa_var.get()
+        hooks.HOOK_RSA_MITM_ACTIVE = active
+        set_attack_state('rsa_mitm', active)
         self.show_status()
 
     def toggle_hmac(self):
-        hooks.HOOK_HMAC_TAMPER_ACTIVE = self.hmac_var.get()
+        active = self.hmac_var.get()
+        hooks.HOOK_HMAC_TAMPER_ACTIVE = active
+        set_attack_state('hmac_tamper', active)
         self.show_status()
 
     def toggle_sha(self):
-        hooks.HOOK_SHA256_BYPASS_ACTIVE = self.sha_var.get()
+        active = self.sha_var.get()
+        hooks.HOOK_SHA256_BYPASS_ACTIVE = active
+        set_attack_state('sha256_bypass', active)
         self.show_status()
+
+    def load_current_states(self):
+        """Load current attack states from shared file and update UI."""
+        try:
+            states = get_attack_states()
+            self.rsa_var.set(states.get('rsa_mitm', False))
+            self.hmac_var.set(states.get('hmac_tamper', False))
+            self.sha_var.set(states.get('sha256_bypass', False))
+            
+            # Update hook variables
+            hooks.HOOK_RSA_MITM_ACTIVE = states.get('rsa_mitm', False)
+            hooks.HOOK_HMAC_TAMPER_ACTIVE = states.get('hmac_tamper', False)
+            hooks.HOOK_SHA256_BYPASS_ACTIVE = states.get('sha256_bypass', False)
+            
+            self.show_status()
+        except Exception as e:
+            print(f"Error loading attack states: {e}")
 
     def show_status(self):
         status = f"RSA MITM: {'ON' if hooks.HOOK_RSA_MITM_ACTIVE else 'OFF'}\n"
         status += f"HMAC Tamper: {'ON' if hooks.HOOK_HMAC_TAMPER_ACTIVE else 'OFF'}\n"
         status += f"SHA-256 Bypass: {'ON' if hooks.HOOK_SHA256_BYPASS_ACTIVE else 'OFF'}\n"
+        status += f"Shared state active - affects main messenger!"
         self.info_box.delete("0.0", "end")
         self.info_box.insert("0.0", status)
 

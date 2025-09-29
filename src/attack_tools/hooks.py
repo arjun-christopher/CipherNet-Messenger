@@ -24,6 +24,17 @@ from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.Hash import HMAC, SHA256
 
+# Import state manager with error handling for different execution contexts
+try:
+    from .attack_state_manager import update_attack_states
+except ImportError:
+    try:
+        from attack_state_manager import update_attack_states
+    except ImportError:
+        # Fallback if state manager isn't available
+        def update_attack_states():
+            pass
+
 # Global flags: UI sets these to activate specific attack vectors!
 HOOK_RSA_MITM_ACTIVE = False      # Enables RSA Man-in-the-Middle attack
 HOOK_HMAC_TAMPER_ACTIVE = False   # Enables HMAC message tampering attack
@@ -55,6 +66,9 @@ def rsa_key_exchange_hook(victim_pubkey, session_key):
     
     Returns: (encrypted_session_key, attacker_key or None)
     """
+    # Update attack states from shared file
+    update_attack_states()
+    
     if HOOK_RSA_MITM_ACTIVE:
         # Step 1: Generate attacker's RSA key pair (2048-bit for compatibility)
         attacker_key = RSA.generate(2048)
@@ -107,6 +121,9 @@ def hmac_message_hook(key, message):
     
     Returns: (message_to_send, hmac_to_send)
     """
+    # Update attack states from shared file
+    update_attack_states()
+    
     if HOOK_HMAC_TAMPER_ACTIVE:
         # Step 1: Modify the original message with malicious prefix
         tampered_message = b"HACKED: " + message
@@ -171,6 +188,9 @@ def sha256_file_hook(file_bytes, expected_hash):
     
     Returns: (file_bytes_to_send, hash_to_send)
     """
+    # Update attack states from shared file
+    update_attack_states()
+    
     if HOOK_SHA256_BYPASS_ACTIVE:
         # Step 1: Create malicious file content (simulating malware injection)
         fake_file = b"INJECTED MALWARE CONTENT - This could be executable code, ransomware, or data theft payload"

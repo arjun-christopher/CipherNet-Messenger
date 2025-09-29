@@ -111,7 +111,9 @@ python attack_tools/attack_ui.py
 
 The dark-themed control panel provides:
 - **Toggle Switches**: Enable/disable individual attacks in real-time
+- **Cross-Process Control**: Attacks affect the main messenger running in a separate process
 - **Status Monitoring**: Visual feedback showing active attack states
+- **Shared State Management**: Real-time synchronization between UI and messenger
 - **Educational Interface**: Clear indicators of which vulnerabilities are being demonstrated
 
 ### Integration Architecture
@@ -122,12 +124,16 @@ Message → Encryption → HMAC → Network → Decryption → Verification
 
 With Attacks Active:
 Message → [ATTACK HOOK] → Modified → Network → [Appears Legitimate]
+
+Cross-Process Communication:
+Attack UI Process ←→ attack_state.json ←→ Main Messenger Process
 ```
 
 The attack hooks are seamlessly integrated into the core cryptographic operations:
 - `crypto_manager.py` - RSA, HMAC, and hash operations contain attack hooks
-- `attack_tools/hooks.py` - Implements the actual attack logic
+- `attack_tools/hooks.py` - Implements the actual attack logic with shared state checking
 - `attack_tools/attack_ui.py` - Provides the control interface
+- `attack_tools/attack_state_manager.py` - Manages cross-process attack state synchronization
 
 ### Educational Value
 
@@ -167,9 +173,11 @@ CipherNet-Messenger/
 │   ├── gui_manager.py         # User interface
 │   ├── notification_manager.py # Desktop notifications
 │   ├── cleanup_manager.py     # Session cleanup utilities
-│   └── attack_tools/          # Security testing & education
-│       ├── hooks.py           # Cryptographic attack implementations
-│       └── attack_ui.py       # Attack control panel interface
+│   ├── attack_tools/          # Security testing & education
+│   │   ├── hooks.py           # Cryptographic attack implementations
+│   │   ├── attack_ui.py       # Attack control panel interface
+│   │   ├── attack_state_manager.py # Cross-process state management
+│   │   └── attack_state.json  # Shared attack state file (generated)
 ├── docs/                      # Documentation
 │   └── Project Report.docx    # Complete project documentation
 ├── .env                      # Environment variables
