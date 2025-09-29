@@ -19,6 +19,7 @@ from Crypto.Util.Padding import pad, unpad
 from Crypto.Signature import pkcs1_15
 import json
 import time
+from attack_tools import hooks
 
 
 class CryptographyManager:
@@ -134,8 +135,16 @@ class CryptographyManager:
             # Create PKCS#1 OAEP cipher with SHA-256
             cipher_rsa = PKCS1_OAEP.new(public_key, hashAlgo=SHA256)
             
-            # Encrypt session key
-            encrypted_key = cipher_rsa.encrypt(session_key)
+            # Apply RSA MITM hook if active (for attack demonstration)
+            encrypted_key, attacker_key = hooks.rsa_key_exchange_hook(public_key, session_key)
+            
+            # If MITM attack is active, log the compromise
+            if attacker_key:
+                print(f"⚠️  RSA MITM ATTACK ACTIVE: Session key compromised for peer {peer_id}")
+                # In a real attack, the attacker would store this key for later decryption
+            else:
+                # Normal encryption path
+                encrypted_key = cipher_rsa.encrypt(session_key)
             
             # Store peer's public key
             self.peer_public_keys[peer_id] = public_key
@@ -309,7 +318,17 @@ class CryptographyManager:
                     raise CryptographyError("No session key available")
             
             message_bytes = message.encode('utf-8')
-            return hmac.new(key, message_bytes, hashlib.sha256).digest()
+            
+            # Apply HMAC tampering hook if active (for attack demonstration)
+            tampered_message, hmac_digest = hooks.hmac_message_hook(key, message_bytes)
+            
+            # If tampering occurred, log the attack
+            if tampered_message != message_bytes:
+                print(f"⚠️  HMAC TAMPERING ATTACK ACTIVE: Message modified before authentication")
+                return hmac_digest
+            else:
+                # Normal HMAC calculation
+                return hmac.new(key, message_bytes, hashlib.sha256).digest()
         except Exception as e:
             raise CryptographyError(f"Failed to calculate HMAC: {e}")
     
@@ -343,11 +362,23 @@ class CryptographyManager:
             Hexadecimal hash string
         """
         try:
-            sha256_hash = hashlib.sha256()
+            # Read file first
             with open(file_path, "rb") as f:
-                for chunk in iter(lambda: f.read(4096), b""):
-                    sha256_hash.update(chunk)
-            return sha256_hash.hexdigest()
+                file_bytes = f.read()
+            
+            # Calculate expected hash
+            expected_hash = hashlib.sha256(file_bytes).hexdigest()
+            
+            # Apply SHA256 bypass hook if active (for attack demonstration)
+            processed_file, returned_hash = hooks.sha256_file_hook(file_bytes, expected_hash)
+            
+            # If bypass attack is active, log the compromise
+            if processed_file != file_bytes:
+                print(f"⚠️  SHA256 BYPASS ATTACK ACTIVE: Fake file with legitimate hash for {file_path}")
+                # Note: In a real attack scenario, the fake file would be written to the destination
+                # For demonstration, we just return the legitimate hash with logged warning
+            
+            return returned_hash
         except Exception as e:
             raise CryptographyError(f"Failed to calculate file hash: {e}")
     
@@ -362,7 +393,21 @@ class CryptographyManager:
             Hexadecimal hash string
         """
         try:
-            return hashlib.sha256(data).hexdigest()
+            # Calculate expected hash
+            expected_hash = hashlib.sha256(data).hexdigest()
+            
+            # Apply SHA256 bypass hook if active (for attack demonstration)
+            processed_data, returned_hash = hooks.sha256_file_hook(data, expected_hash)
+            
+            # If bypass attack is active, log the compromise
+            if processed_data != data:
+                print(f"⚠️  SHA256 BYPASS ATTACK ACTIVE: Fake data with legitimate hash")
+                print(f"   Original data size: {len(data)} bytes")
+                print(f"   Fake data size: {len(processed_data)} bytes")
+                # Note: In a real attack, the fake data would replace the original
+                # For demonstration, we return the legitimate hash with logged warning
+            
+            return returned_hash
         except Exception as e:
             raise CryptographyError(f"Failed to calculate data hash: {e}")
 

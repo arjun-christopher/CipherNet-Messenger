@@ -89,6 +89,61 @@ User A ←→ Firebase (Auth/Discovery) ←→ User B
 4. Session key encrypted with RSA and shared
 5. All messages encrypted with Blowfish using shared session key
 
+## Attack Tools & Security Testing
+
+CipherNet Messenger includes an integrated **Attack Tools System** for educational purposes and security testing. This system demonstrates common cryptographic vulnerabilities and attack vectors that secure messaging applications must defend against.
+
+### Attack Demonstrations
+
+The attack tools provide real-time demonstrations of:
+
+- **RSA Man-in-the-Middle (MITM)**: Intercepts RSA key exchanges and substitutes attacker-controlled keys
+- **HMAC Message Tampering**: Modifies message content while maintaining valid authentication signatures  
+- **SHA256 Hash Bypass**: Replaces file content while preserving original integrity hashes
+
+### Attack Control Panel
+
+Launch the attack control interface:
+```bash
+cd src
+python attack_tools/attack_ui.py
+```
+
+The dark-themed control panel provides:
+- **Toggle Switches**: Enable/disable individual attacks in real-time
+- **Status Monitoring**: Visual feedback showing active attack states
+- **Educational Interface**: Clear indicators of which vulnerabilities are being demonstrated
+
+### Integration Architecture
+
+```
+Normal Operation:
+Message → Encryption → HMAC → Network → Decryption → Verification
+
+With Attacks Active:
+Message → [ATTACK HOOK] → Modified → Network → [Appears Legitimate]
+```
+
+The attack hooks are seamlessly integrated into the core cryptographic operations:
+- `crypto_manager.py` - RSA, HMAC, and hash operations contain attack hooks
+- `attack_tools/hooks.py` - Implements the actual attack logic
+- `attack_tools/attack_ui.py` - Provides the control interface
+
+### Educational Value
+
+This system demonstrates:
+- **Why end-to-end encryption matters**: Shows how MITM attacks compromise communication
+- **Message authentication importance**: Illustrates tampering without detection
+- **File integrity verification**: Shows hash collision/bypass vulnerabilities
+- **Real-world attack scenarios**: Provides hands-on security education
+
+### Ethical Use Warning
+
+**The attack tools are for educational and authorized security testing only.**
+- Use only on systems you own or have explicit permission to test
+- Designed for learning cryptographic security principles
+- Not intended for malicious purposes
+
 ## User Interface
 
 - **Map-Based Discovery**: Interactive canvas showing online users
@@ -105,20 +160,23 @@ CipherNet-Messenger/
 │   ├── main.py                # Application entry point
 │   ├── config.py              # Configuration management
 │   ├── auth_manager.py        # Firebase authentication
-│   ├── crypto_manager.py      # RSA/Blowfish encryption
+│   ├── crypto_manager.py      # RSA/Blowfish encryption (with attack hooks)
 │   ├── network_manager.py     # P2P networking
 │   ├── firebase_manager.py    # Firebase operations
 │   ├── file_transfer_manager.py # Secure file sharing
 │   ├── gui_manager.py         # User interface
 │   ├── notification_manager.py # Desktop notifications
-│   └── cleanup_manager.py     # Session cleanup utilities
+│   ├── cleanup_manager.py     # Session cleanup utilities
+│   └── attack_tools/          # Security testing & education
+│       ├── hooks.py           # Cryptographic attack implementations
+│       └── attack_ui.py       # Attack control panel interface
 ├── docs/                      # Documentation
 │   └── Project Report.docx    # Complete project documentation
 ├── .env                      # Environment variables
 ├── requirements.txt          # Python dependencies
 ├── setup.py                 # Setup script
-├──  README.md               # This file
-├──  LICENSE                # Open-source license details
+├── README.md                # This file
+├── LICENSE                 # Open-source license details
 └── .gitignore               # Ignored files & folders for Git
 ```
 
