@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import threading
 import time
+import hooks
 
 # Attack state file path
 ATTACK_STATE_FILE = Path(__file__).parent / "attack_state.json"
@@ -71,7 +72,6 @@ class AttackStateManager:
             state = self._load_state()
             
             # Update global hook variables
-            import attack_tools.hooks as hooks
             hooks.HOOK_RSA_MITM_ACTIVE = state.get('rsa_mitm_active', False)
             hooks.HOOK_HMAC_TAMPER_ACTIVE = state.get('hmac_tamper_active', False)
             hooks.HOOK_SHA256_BYPASS_ACTIVE = state.get('sha256_bypass_active', False)
@@ -91,7 +91,6 @@ class AttackStateManager:
             self._save_state(state)
             
             # Also update current process immediately
-            import attack_tools.hooks as hooks
             if attack_type == 'rsa_mitm':
                 hooks.HOOK_RSA_MITM_ACTIVE = active
             elif attack_type == 'hmac_tamper':
