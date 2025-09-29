@@ -13,6 +13,14 @@ import base64
 from typing import Callable, Optional, Dict, Any, Tuple
 from datetime import datetime
 
+# Import attack state manager for enhanced MITM detection
+try:
+    from attack_tools.attack_state_manager import get_attack_states
+except ImportError:
+    # Fallback if attack tools aren't available
+    def get_attack_states():
+        return {'rsa_mitm_active': False, 'hmac_tamper_active': False, 'sha256_bypass_active': False}
+
 
 class NetworkManager:
     """Manages P2P network connections and message routing."""
@@ -788,47 +796,92 @@ class NetworkManager:
                     print(f"❌ Failed to decode peer public key: {e}")
             
             # Decrypt the session key using our private key
-            session_key = self.crypto_manager.decrypt_session_key(key_exchange_data, peer_id)
-            
-            if session_key:
-                # Update session state
-                session_info = {
-                    'status': 'established',
-                    'established_at': time.time(),
-                    'session_key': session_key,
-                    'protocol_version': message.get('protocol_version', '1.0')
-                }
+            try:
+                session_key = self.crypto_manager.decrypt_session_key(key_exchange_data, peer_id)
                 
-                # Store peer's public key if available
-                if peer_public_key_pem:
-                    session_info['peer_public_key'] = peer_public_key_pem
+                if session_key:
+                    # Update session state
+                    session_info = {
+                        'status': 'established',
+                        'established_at': time.time(),
+                        'session_key': session_key,
+                        'protocol_version': message.get('protocol_version', '1.0')
+                    }
+                    
+                    # Store peer's public key if available
+                    if peer_public_key_pem:
+                        session_info['peer_public_key'] = peer_public_key_pem
+                    
+                    self.peer_sessions[peer_id] = session_info
+                    
+                    # Send session establishment confirmation
+                    confirmation_message = {
+                        "type": "session_established",
+                        "status": "confirmed",
+                        "session_id": f"{self._get_own_peer_id()}_{peer_id}_{int(time.time())}",
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    
+                    if peer_id in self.client_connections:
+                        conn = self.client_connections[peer_id]
+                        self._send_raw_message(conn, json.dumps(confirmation_message))
+                    
+                    # Call session establishment callback if registered
+                    if peer_id in self.session_establishment_callbacks:
+                        callback = self.session_establishment_callbacks[peer_id]
+                        callback(peer_id, True, "Session established successfully")
+                        del self.session_establishment_callbacks[peer_id]
+                    
+                    print(f"✅ Secure session established with peer {peer_id}")
+                else:
+                    # Session key decryption failed (could be MITM attack)
+                    print(f"❌ Failed to decrypt session key from peer {peer_id}")
+                    
+                    # Call failure callback if registered
+                    if peer_id in self.session_establishment_callbacks:
+                        callback = self.session_establishment_callbacks[peer_id]
+                        callback(peer_id, False, "RSA key exchange failed - possible MITM attack detected!")
+                        del self.session_establishment_callbacks[peer_id]
+                    
+            except Exception as decrypt_error:
+                # Decryption failed - check if it's due to RSA MITM attack
+                attack_states = get_attack_states()
+                is_mitm_active = attack_states.get('rsa_mitm_active', False)
                 
-                self.peer_sessions[peer_id] = session_info
+                if is_mitm_active:
+                    print(f"🚨 RSA MITM ATTACK CONFIRMED! Attack is currently active.")
+                    print(f"🚨 Key exchange compromised - session cannot be established!")
+                    error_msg = '''🚨 MITM ATTACK DETECTED!
+                    
+                    The key exchange has been compromised by a Man-in-the-Middle attack.
+                    Secure communication cannot be established.
+                    ⚠️ This connection is NOT SAFE!'''
+                else:
+                    print(f"🚨 RSA decryption failed from peer {peer_id}: {decrypt_error}")
+                    print(f"🚨 POSSIBLE RSA MITM ATTACK OR KEY MISMATCH!")
+                    error_msg = f'''RSA Key Exchange Failed!
+                    Unable to decrypt session key.
+                    Possible causes:
+                    • RSA MITM Attack
+                    • Key corruption
+                    • Protocol mismatch
+                    
+                    Error: {str(decrypt_error)}'''
                 
-                # Send session establishment confirmation
-                confirmation_message = {
-                    "type": "session_established",
-                    "status": "confirmed",
-                    "session_id": f"{self._get_own_peer_id()}_{peer_id}_{int(time.time())}",
-                    "timestamp": datetime.now().isoformat()
-                }
-                
-                if peer_id in self.client_connections:
-                    conn = self.client_connections[peer_id]
-                    self._send_raw_message(conn, json.dumps(confirmation_message))
-                
-                # Call session establishment callback if registered
+                # Call failure callback if registered
                 if peer_id in self.session_establishment_callbacks:
                     callback = self.session_establishment_callbacks[peer_id]
-                    callback(peer_id, True, "Session established successfully")
+                    callback(peer_id, False, error_msg)
                     del self.session_establishment_callbacks[peer_id]
-                
-                print(f"✅ Secure session established with peer {peer_id}")
-            else:
-                print(f"❌ Failed to decrypt session key from peer {peer_id}")
                 
         except Exception as e:
             print(f"❌ Error handling key exchange from {peer_id}: {e}")
+            
+            # Call failure callback for any other errors
+            if peer_id in self.session_establishment_callbacks:
+                callback = self.session_establishment_callbacks[peer_id]
+                callback(peer_id, False, f"Key exchange error: {str(e)}")
+                del self.session_establishment_callbacks[peer_id]
     
     def _handle_session_established(self, message: Dict[str, Any], peer_id: str):
         """

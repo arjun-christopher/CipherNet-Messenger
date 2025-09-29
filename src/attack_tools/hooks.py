@@ -1,16 +1,7 @@
 """
-CipherNet-Messenger Attack Hooks Moddef _get_attack_state(attack_name):
-    \"\"\"Get current attack state from JSON file.\"\"\"
-    try:
-        states = get_attack_states()
-        # Debug: print what we got
-        print(f"[DEBUG] _get_attack_state('{attack_name}') - states: {states}")
-        result = states.get(attack_name, False)
-        print(f"[DEBUG] _get_attack_state('{attack_name}') - result: {result}")
-        return result
-    except Exception as e:
-        print(f"[DEBUG] _get_attack_state('{attack_name}') - exception: {e}")
-        return FalseThis file contains cryptographic attack implementations used for security testing
+CipherNet-Messenger Attack Hooks Module
+
+This file contains cryptographic attack implementations used for security testing
 and educational purposes. It provides hook functions that can be activated to
 demonstrate various attack vectors against cryptographic protocols:
 
