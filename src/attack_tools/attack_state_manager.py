@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 import threading
 import time
-import hooks
+from . import hooks
 
 # Attack state file path
 ATTACK_STATE_FILE = Path(__file__).parent / "attack_state.json"
