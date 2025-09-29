@@ -141,6 +141,9 @@ class GUIManager:
             config, self.crypto_manager, self.network_manager, self.notification_manager
         )
         
+        # Give file transfer manager access to GUI for security alerts
+        self.file_transfer_manager.gui_manager = self
+        
         # GUI setup
         ctk.set_appearance_mode(config.get('ui.theme', 'dark'))
         ctk.set_default_color_theme("blue")
@@ -993,6 +996,27 @@ class GUIManager:
             
         except Exception as e:
             print(f"Error showing session error: {e}")
+    
+    def show_security_alert(self, alert_message: str):
+        """
+        Show critical security alert dialog.
+        
+        Args:
+            alert_message: Security alert message to display
+        """
+        try:
+            # Show critical security alert immediately
+            messagebox.showerror(
+                "🚨 SECURITY ALERT", 
+                alert_message
+            )
+            
+            # Also add to chat if chat interface is active
+            if hasattr(self, 'current_view') and self.current_view == "chat":
+                self._add_system_message(f"🚨 SECURITY ALERT: {alert_message.split('\\n')[0]}")
+            
+        except Exception as e:
+            print(f"Error showing security alert: {e}")
     
     def _file_transfer_progress(self, sent_bytes: int, total_bytes: int):
         """Handle file transfer progress updates."""

@@ -675,33 +675,40 @@ class FileTransferManager:
             print(f"   Calculated SHA-256: {calculated_hash}")
             print(f"   Hash match: {'✅' if calculated_hash == expected_hash else '❌'}")
             
-            # Handle hash mismatch
+            # Handle hash mismatch - SECURITY: DO NOT SAVE CORRUPTED FILES
             if calculated_hash != expected_hash:
-                print("❌ File integrity check failed! File may be corrupted or tampered with.")
-                print(f"   Expected: {expected_hash}")
-                print(f"   Got:      {calculated_hash}")
-                print(f"   Saving as CORRUPTED file for debugging...")
+                print("🚨 SECURITY ALERT: File integrity check failed!")
+                print("⚠️  File may be corrupted, tampered with, or under attack!")
+                print(f"   Expected hash: {expected_hash}")
+                print(f"   Calculated hash: {calculated_hash}")
+                print("🛡️  For security reasons, corrupted file will NOT be saved.")
+                print("🚨 This could indicate a SHA256 bypass attack in progress!")
                 
-                # Save with CORRUPTED prefix for debugging
-                safe_filename = self._sanitize_filename(f"CORRUPTED_{filename}")
-                file_path = self.downloads_dir / safe_filename
+                # Show security alert in GUI
+                corruption_message = (
+                    f"🚨 SECURITY ALERT: File Corruption Detected!\n\n"
+                    f"File: {filename}\n"
+                    f"Size: {len(file_data):,} bytes\n\n"
+                    f"The received file failed integrity verification.\n"
+                    f"This could indicate:\n"
+                    f"• File corruption during transfer\n"
+                    f"• Malicious tampering or attack\n"
+                    f"• SHA256 bypass attack in progress\n\n"
+                    f"🛡️ For your security, the file was NOT saved.\n\n"
+                    f"Expected hash: {expected_hash}\n"
+                    f"Received hash: {calculated_hash}"
+                )
                 
-                # Ensure unique filename
-                counter = 1
-                original_path = file_path
-                while file_path.exists():
-                    name = original_path.stem
-                    suffix = original_path.suffix
-                    file_path = original_path.parent / f"{name}_{counter}{suffix}"
-                    counter += 1
+                # Show alert in GUI if available
+                if hasattr(self, 'gui_manager') and self.gui_manager:
+                    self.gui_manager.show_security_alert(corruption_message)
                 
-                try:
-                    with open(file_path, 'wb') as f:
-                        f.write(file_data)
-                    print(f"⚠️ Corrupted file saved for debugging: {file_path}")
-                    print(f"📊 Corrupted file size: {file_path.stat().st_size} bytes")
-                except Exception as save_error:
-                    print(f"❌ Failed to save corrupted file: {save_error}")
+                # Also trigger notification
+                if hasattr(self, 'notification_manager') and self.notification_manager:
+                    self.notification_manager.show_notification(
+                        "Security Alert: File Corruption",
+                        f"File '{filename}' failed integrity check and was rejected for security."
+                    )
                 
                 return False
             
@@ -799,6 +806,15 @@ class FileTransferManager:
                 print(f"❌ Failed to write file to disk: {write_error}")
                 import traceback
                 traceback.print_exc()
+                
+                # Show error alert in GUI if available
+                if hasattr(self, 'gui_manager') and self.gui_manager:
+                    self.gui_manager.show_security_alert(
+                        f"❌ File Save Error\\n\\n"
+                        f"Failed to save file: {filename}\\n"
+                        f"Error: {str(write_error)}"
+                    )
+                
                 return False
             
         except Exception as e:
