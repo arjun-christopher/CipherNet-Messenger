@@ -2,5 +2,5 @@
   "rsa_mitm_active": true,
   "hmac_tamper_active": false,
   "sha256_bypass_active": false,
-  "last_updated": 1759160973.966414
+  "last_updated": 1759680100.603286
 }

@@ -44,7 +44,8 @@ except ImportError:
     def set_attack_state(attack_type, active):
         pass
     def get_attack_states():
-        return {'rsa_mitm': False, 'hmac_tamper': False, 'sha256_bypass': False}
+        # Return keys matching the attack_state_manager schema (with _active suffix)
+        return {'rsa_mitm_active': False, 'hmac_tamper_active': False, 'sha256_bypass_active': False}
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("dark-blue")
@@ -92,34 +93,59 @@ class AttackControlUI(ctk.CTk):
 
     def toggle_rsa(self):
         active = self.rsa_var.get()
-        hooks.HOOK_RSA_MITM_ACTIVE = active
-        set_attack_state('rsa_mitm', active)
+        # Update hook flag and shared state (support both legacy and current keys)
+        setattr(hooks, 'HOOK_RSA_MITM_ACTIVE', active)
+        try:
+            set_attack_state('rsa_mitm', active)
+        except Exception:
+            # Fallback write to active-key variant
+            try:
+                set_attack_state('rsa_mitm_active', active)
+            except Exception:
+                pass
         self.show_status()
 
     def toggle_hmac(self):
         active = self.hmac_var.get()
-        hooks.HOOK_HMAC_TAMPER_ACTIVE = active
-        set_attack_state('hmac_tamper', active)
+        setattr(hooks, 'HOOK_HMAC_TAMPER_ACTIVE', active)
+        try:
+            set_attack_state('hmac_tamper', active)
+        except Exception:
+            try:
+                set_attack_state('hmac_tamper_active', active)
+            except Exception:
+                pass
         self.show_status()
 
     def toggle_sha(self):
         active = self.sha_var.get()
-        hooks.HOOK_SHA256_BYPASS_ACTIVE = active
-        set_attack_state('sha256_bypass', active)
+        setattr(hooks, 'HOOK_SHA256_BYPASS_ACTIVE', active)
+        try:
+            set_attack_state('sha256_bypass', active)
+        except Exception:
+            try:
+                set_attack_state('sha256_bypass_active', active)
+            except Exception:
+                pass
         self.show_status()
 
     def load_current_states(self):
         """Load current attack states from shared file and update UI."""
         try:
             states = get_attack_states()
-            self.rsa_var.set(states.get('rsa_mitm', False))
-            self.hmac_var.set(states.get('hmac_tamper', False))
-            self.sha_var.set(states.get('sha256_bypass', False))
-            
-            # Update hook variables
-            hooks.HOOK_RSA_MITM_ACTIVE = states.get('rsa_mitm', False)
-            hooks.HOOK_HMAC_TAMPER_ACTIVE = states.get('hmac_tamper', False)
-            hooks.HOOK_SHA256_BYPASS_ACTIVE = states.get('sha256_bypass', False)
+            # Support both naming conventions: 'rsa_mitm_active' (current) and 'rsa_mitm' (legacy)
+            rsa_state = states.get('rsa_mitm_active', states.get('rsa_mitm', False))
+            hmac_state = states.get('hmac_tamper_active', states.get('hmac_tamper', False))
+            sha_state = states.get('sha256_bypass_active', states.get('sha256_bypass', False))
+
+            self.rsa_var.set(rsa_state)
+            self.hmac_var.set(hmac_state)
+            self.sha_var.set(sha_state)
+
+            # Update hook variables (these act as quick-access flags inside hooks if present)
+            setattr(hooks, 'HOOK_RSA_MITM_ACTIVE', rsa_state)
+            setattr(hooks, 'HOOK_HMAC_TAMPER_ACTIVE', hmac_state)
+            setattr(hooks, 'HOOK_SHA256_BYPASS_ACTIVE', sha_state)
             
             self.show_status()
         except Exception as e:

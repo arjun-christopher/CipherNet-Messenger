@@ -148,9 +148,7 @@ class CryptographyManager:
                 print(f"⚠️  WARNING: Secure communication will FAIL due to key mismatch!")
                 # Note: The encrypted_key from the hook is encrypted with attacker's key,
                 # so when the victim tries to decrypt it with their private key, it will fail
-            else:
-                # Normal encryption path
-                encrypted_key = cipher_rsa.encrypt(session_key)
+                # encrypted_key is already set by the hook - DO NOT re-encrypt
             
             # Store peer's public key
             self.peer_public_keys[peer_id] = public_key
